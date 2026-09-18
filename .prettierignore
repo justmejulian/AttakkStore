@@ -1,0 +1,7 @@
+node_modules
+**/dist
+**/.astro
+pnpm-lock.yaml
+
+# vendored Lumos tooling scripts — not ours to format
+**/.claude

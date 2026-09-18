@@ -7,4 +7,4 @@
  * `feat(api): schema migrations and shared validation`. This placeholder
  * keeps the package a valid, importable module in the meantime.
  */
-export const TYPES_PACKAGE_VERSION = '0.0.0';
+export const TYPES_PACKAGE_VERSION = "0.0.0";

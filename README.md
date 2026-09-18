@@ -3,12 +3,12 @@
 The [atk-collective.ch](https://atk-collective.ch) storefront, rebuilt as three
 independently deployed apps in one pnpm monorepo.
 
-| Path             | App     | Stack                                   | Owns                                         |
-| ---------------- | ------- | --------------------------------------- | -------------------------------------------- |
-| `apps/shop`      | Shop    | Astro 7 + Lumos, node adapter           | Storefront pages, cart, checkout form        |
-| `apps/api`       | API     | Node + Hono + better-sqlite3 _(later)_  | The database, QR bills, email, uploads       |
-| `apps/admin`     | Admin   | Node + Hono, server-rendered _(later)_  | Order and product screens                    |
-| `packages/types` | Types   | TypeScript + zod                        | Shared types and validation schemas          |
+| Path             | App   | Stack                                  | Owns                                   |
+| ---------------- | ----- | -------------------------------------- | -------------------------------------- |
+| `apps/shop`      | Shop  | Astro 7 + Lumos, node adapter          | Storefront pages, cart, checkout form  |
+| `apps/api`       | API   | Node + Hono + better-sqlite3 _(later)_ | The database, QR bills, email, uploads |
+| `apps/admin`     | Admin | Node + Hono, server-rendered _(later)_ | Order and product screens              |
+| `packages/types` | Types | TypeScript + zod                       | Shared types and validation schemas    |
 
 `apps/api` and `apps/admin` are scaffolded in a later milestone. `apps/shop` is
 seeded from a fresh [Lumos](https://lumosframework.com/docs/) scaffold (Astro 7,
