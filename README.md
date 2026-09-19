@@ -77,20 +77,39 @@ understand `--mount` and the build fails.
 ## Deploying with Dokku
 
 Dokku never uses `docker-compose.yml` — it builds each app from its own
-Dockerfile. Point each app at its Dockerfile and match the topology the compose
-file mirrors:
+Dockerfile. Dokku apps are isolated by default, so reproducing the compose
+topology takes an explicit shared network and `API_URL` config; without them the
+admin and shop fall back to `http://localhost:3000` and never reach the API.
 
 ```sh
+# Shared resources: one network the three apps resolve each other over, and the
+# data directory the API owns — created before it is mounted, since Dokku will
+# not create the host path for you.
+dokku network:create attakk
+dokku storage:ensure-directory attakk
+
+# API — internal only, the sole writer of the data volume.
 dokku apps:create attakk-api
 dokku builder-dockerfile:set attakk-api dockerfile-path apps/api/Dockerfile
-dokku proxy:disable attakk-api                 # internal-only, no published port
+dokku network:set attakk-api attach-post-create attakk
+dokku proxy:disable attakk-api                 # no published port
 dokku storage:mount attakk-api /var/lib/dokku/data/storage/attakk:/data
 
+# Admin — off the public proxy (reached through an SSH tunnel), talking to the
+# API over the shared network.
 dokku apps:create attakk-admin
 dokku builder-dockerfile:set attakk-admin dockerfile-path apps/admin/Dockerfile
+dokku network:set attakk-admin attach-post-create attakk
+dokku proxy:disable attakk-admin
+dokku config:set attakk-admin API_URL=http://attakk-api.web:3000
 
+# Shop — the only public app. Reaches the API over the shared network and reads
+# uploads straight off the API's volume, mounted read-only.
 dokku apps:create attakk-shop
 dokku builder-dockerfile:set attakk-shop dockerfile-path apps/shop/Dockerfile
+dokku network:set attakk-shop attach-post-create attakk
+dokku config:set attakk-shop API_URL=http://attakk-api.web:3000
+dokku storage:mount attakk-shop /var/lib/dokku/data/storage/attakk/uploads:/uploads:ro
 ```
 
 The Dockerfiles rely on BuildKit (the `RUN --mount` cache). Docker Engine 24+
