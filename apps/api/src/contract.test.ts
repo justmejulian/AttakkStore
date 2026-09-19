@@ -31,6 +31,7 @@ seedAdminUser(db);
 const { catalog } = await import("./routes/catalog.js");
 const { orders } = await import("./routes/orders.js");
 const { admin } = await import("./routes/admin.js");
+const { adminProducts } = await import("./routes/admin-products.js");
 
 after(() => cleanup());
 
@@ -191,6 +192,17 @@ test("POST /admin/login is 400 with the mock's body on a malformed request", asy
   const res = await postJson(admin, "/admin/login", { username: "x" });
   assert.equal(res.status, 400);
   assert.deepEqual(await res.json(), { error: "invalid" });
+});
+
+test("GET /admin/products/:id returns the product fixture verbatim", async () => {
+  // The admin's edit-form read is the same ProductWithSizes shape the catalogue
+  // serves, but for any status. Product 10 is live, so its detail must match the
+  // jersey fixture byte for byte, sizes and images included. (The list's
+  // ordered_count depends on which orders are seeded, so byte-parity there is not
+  // meaningful — the route test pins the tally instead.)
+  const res = await adminProducts.request("/admin/products/10");
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), jerseyProduct);
 });
 
 function postOrder(body: unknown): Promise<Response> {

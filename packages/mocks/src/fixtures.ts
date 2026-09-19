@@ -1,4 +1,5 @@
 import type {
+  AdminProductRow,
   AdminUser,
   DropWithProducts,
   OrderInput,
@@ -304,6 +305,42 @@ export const uploadedImage: ProductImage = {
 // rows to read. The live subset (liveDrops) is derived from this by the API's
 // own status filter, not duplicated here.
 export const allDrops: DropWithProducts[] = [redlineDrop, originsDrop];
+
+/* ---------------------------------------------------------- admin products */
+
+// Units ordered per product, tallied the way the API's list query does — summing
+// quantities on every non-cancelled order — so cancelledOrder's line does not
+// count. This is what the products list compares against min_orders.
+const orderedUnits = new Map<number, number>();
+for (const order of allOrders) {
+  if (order.status === "cancelled") continue;
+  for (const item of order.items) {
+    orderedUnits.set(
+      item.product_id,
+      (orderedUnits.get(item.product_id) ?? 0) + item.qty,
+    );
+  }
+}
+
+// GET /admin/products — every product across every drop the admin can edit, in
+// the drop-then-product sort order the API returns (allDrops is already in that
+// order, and each drop's products with it). Each row drops the sizes and images
+// the list does not show and gains its drop's name and status plus the ordered
+// tally. The detail read (GET /admin/products/:id) is the full ProductWithSizes,
+// served from the drops fixture by id.
+export const adminProducts: AdminProductRow[] = allDrops.flatMap((drop) =>
+  drop.products.map((product) => {
+    const { sizes, images, ...row } = product;
+    void sizes; // the list is the bare row; sizes and images load in the detail
+    void images;
+    return {
+      ...row,
+      drop_name: drop.name,
+      drop_status: drop.status,
+      ordered_count: orderedUnits.get(product.id) ?? 0,
+    };
+  }),
+);
 
 /* ------------------------------------------------------------------- admin */
 

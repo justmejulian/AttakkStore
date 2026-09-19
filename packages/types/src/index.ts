@@ -117,6 +117,18 @@ export interface DropWithProducts extends Drop {
   products: ProductWithSizes[];
 }
 
+// A product as the admin's products list shows it: the row itself, plus the drop
+// it belongs to (name and status — enough to group the flat list and hint which
+// pieces are live) and ordered_count, the number of units ordered across
+// non-cancelled orders. That tally is what the list shows against min_orders, the
+// pre-order target: a cancelled order is not a piece to produce, so its units do
+// not count toward it.
+export interface AdminProductRow extends Product {
+  drop_name: string;
+  drop_status: DropStatus;
+  ordered_count: number;
+}
+
 /* ------------------------------------------------------------------ orders */
 
 // The three states an order moves through. Declared as one tuple so the type,

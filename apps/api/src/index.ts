@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { db } from "./db.js";
 import { admin } from "./routes/admin.js";
 import { adminOrders } from "./routes/admin-orders.js";
+import { adminProducts } from "./routes/admin-products.js";
 import { catalog } from "./routes/catalog.js";
 import { images } from "./routes/images.js";
 import { orders } from "./routes/orders.js";
@@ -44,6 +45,10 @@ app.route("/", admin);
 // The admin's order screens: list, detail, mark paid/cancelled, edit the note,
 // resend the QR bill. Reached over the internal network only.
 app.route("/", adminOrders);
+
+// The admin's product screens: list every product by drop with an ordered-units
+// tally, and one product with its sizes and images for editing. Internal only.
+app.route("/", adminProducts);
 
 serve({ fetch: app.fetch, port: PORT }, ({ port }) => {
   console.log(`api listening on :${port}`);

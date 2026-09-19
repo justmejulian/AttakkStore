@@ -3,8 +3,10 @@ import { after, before, test } from "node:test";
 import { setupServer } from "msw/node";
 import {
   adminCredentials,
+  adminProducts,
   adminUser,
   createdOrder,
+  jerseyProduct,
   liveDrops,
   orderListRows,
   paidOrder,
@@ -187,6 +189,18 @@ test("POST resend is 202 for a known order and 404 otherwise", async () => {
     method: "POST",
   });
   assert.equal(miss.status, 404);
+});
+
+test("GET /admin/products lists the rows and 404s an unknown detail id", async () => {
+  const list = await fetch(`${base}/admin/products`);
+  assert.equal(list.status, 200);
+  assert.deepEqual(await list.json(), adminProducts);
+
+  const detail = await fetch(`${base}/admin/products/10`);
+  assert.equal(detail.status, 200);
+  assert.deepEqual(await detail.json(), jerseyProduct);
+
+  assert.equal((await fetch(`${base}/admin/products/999`)).status, 404);
 });
 
 test("image write routes return the stored row and an empty 204", async () => {

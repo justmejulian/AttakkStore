@@ -8,12 +8,13 @@ import {
 import { http, HttpResponse } from "msw";
 import {
   adminCredentials,
+  adminProducts,
   adminUser,
+  allDrops,
   allOrders,
   createdOrder,
   liveDrops,
   orderListRows,
-  originsDrop,
   redlineDrop,
   uploadedImage,
 } from "./fixtures.js";
@@ -57,19 +58,23 @@ function lineRejection(line: {
 }
 
 // One drop, by slug — live or archived, mirroring the API's live-or-archived
-// read. Anything else is the 404 the shop routes to its not-found page.
-const dropsBySlug = new Map(
-  [redlineDrop, originsDrop].map((d) => [d.slug, d] as const),
-);
+// read. Anything else is the 404 the shop routes to its not-found page. Both maps
+// key off allDrops so "every drop" is spelled once; adding a fixture drop reaches
+// the slug reads without touching this.
+const dropsBySlug = new Map(allDrops.map((d) => [d.slug, d] as const));
 const productsBySlug = new Map(
-  [redlineDrop, originsDrop]
-    .flatMap((d) => d.products)
-    .map((p) => [p.slug, p] as const),
+  allDrops.flatMap((d) => d.products).map((p) => [p.slug, p] as const),
 );
 
 // Stored orders by id, for the admin's detail, status and note handlers. The
 // list is the same rows without their items (orderListRows).
 const ordersById = new Map(allOrders.map((o) => [o.id, o] as const));
+
+// Every product by id — the full ProductWithSizes, for the admin's edit-form
+// read. The list (adminProducts) is the flat, drop-annotated projection.
+const productsById = new Map(
+  allDrops.flatMap((d) => d.products).map((p) => [p.id, p] as const),
+);
 
 function isOrderStatus(value: string): boolean {
   return (ORDER_STATUSES as readonly string[]).includes(value);
@@ -87,6 +92,22 @@ export const handlers = [
     const drop = dropsBySlug.get(String(params.slug));
     return drop
       ? HttpResponse.json(drop)
+      : HttpResponse.json({ error: "not_found" }, { status: 404 });
+  }),
+
+  // The admin's product screens. Registered before the storefront's
+  // `*/products/:slug` read because MSW matches in order with a `*`-wildcard
+  // origin: without this, `/admin/products/10` would match `*/products/:slug`
+  // (slug "10") and 404. The real API has no such collision — Hono matches the
+  // literal `/admin/products` and `/products` prefixes distinctly. The list is
+  // every product grouped by drop with its ordered-units tally; the detail is the
+  // full product with its sizes and images, keyed off the fixtures by id.
+  http.get("*/admin/products", () => HttpResponse.json(adminProducts)),
+
+  http.get("*/admin/products/:id", ({ params }) => {
+    const product = productsById.get(Number(params.id));
+    return product
+      ? HttpResponse.json(product)
       : HttpResponse.json({ error: "not_found" }, { status: 404 });
   }),
 
