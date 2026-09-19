@@ -30,8 +30,8 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild",
-      "sharp",
-      "workerd"
+      "better-sqlite3",
+      "sharp"
     ]
   }
 }

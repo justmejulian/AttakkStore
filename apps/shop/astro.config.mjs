@@ -1,5 +1,6 @@
 // @ts-check
 import { defineConfig, fontProviders } from "astro/config";
+import node from "@astrojs/node";
 import sitemap from "@astrojs/sitemap";
 import { SITE_URL } from "./src/consts.ts";
 import { isNoindexRoute } from "./src/utils/seo.ts";
@@ -33,6 +34,11 @@ function viteDevtools() {
 
 export default defineConfig({
   site: SITE_URL,
+  // Server-rendered on the Node adapter: an edit in the admin shows up on the
+  // next page load with no rebuild, and every API call happens server-side over
+  // the internal network. Standalone mode ships its own HTTP server for Docker.
+  output: "server",
+  adapter: node({ mode: "standalone" }),
   integrations: [
     viteDevtools(),
     sitemap({

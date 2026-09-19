@@ -1,0 +1,3 @@
+# Local dev data volume — the SQLite file and uploads. In staging and prod
+# this lives on a mounted volume, never in the repo.
+data/

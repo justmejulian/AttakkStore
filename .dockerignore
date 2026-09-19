@@ -1,0 +1,16 @@
+# The build context is the repo root (pnpm workspace). Keep it to source and
+# the lockfile; everything below is generated, vendored, or secret.
+**/node_modules
+**/dist
+**/.astro
+**/data
+.git
+.github
+**/.claude
+**/.vscode
+**/*.log
+**/.DS_Store
+.env
+.env.*
+**/.env
+**/.env.*

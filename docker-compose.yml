@@ -1,0 +1,92 @@
+# Staging: the whole stack on one internal network, mirroring the Dokku
+# topology from the ops plan so it can be brought up and verified locally
+# before anything is pushed. The real production deploy stays a Dokku concern.
+#
+#   docker compose up --build
+#   curl localhost:4321                      # shop (public)
+#   curl localhost:8080/health               # admin (loopback only)
+#
+# The API publishes no port — like `dokku proxy:disable attakk-api`, it is
+# reachable only from the other services over the `attakk` network.
+
+name: attakk
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      PORT: "3000"
+      DATA_DIR: /data
+    volumes:
+      # The API is the only writer of the data volume.
+      - attakk-data:/data
+    networks:
+      - attakk
+    # /health only answers once the process is up, and by then db.ts has already
+    # created /data/uploads — so the shop can wait on this before mounting that
+    # subpath read-only. node runs the probe since the slim image has no curl.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  admin:
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+    environment:
+      PORT: "3000"
+      API_URL: http://api:3000
+    ports:
+      # Loopback only, reached in production through an SSH tunnel.
+      - "127.0.0.1:8080:3000"
+    networks:
+      - attakk
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  shop:
+    build:
+      context: .
+      dockerfile: apps/shop/Dockerfile
+    environment:
+      HOST: 0.0.0.0
+      PORT: "4321"
+      API_URL: http://api:3000
+    ports:
+      - "4321:4321"
+    volumes:
+      # Read-only view of just the uploads the API writes — the shop serves
+      # images straight off disk and can never touch the database file.
+      - type: volume
+        source: attakk-data
+        target: /uploads
+        read_only: true
+        volume:
+          subpath: uploads
+    networks:
+      - attakk
+    depends_on:
+      # Wait until the API is healthy, not merely started, so /data/uploads
+      # exists before this read-only subpath mount resolves it.
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  attakk:
+
+volumes:
+  attakk-data:
