@@ -11,6 +11,7 @@
   ],
   "scripts": {
     "dev": "astro dev",
+    "dev:mock": "MOCK_API=1 NODE_OPTIONS=\"--conditions=source --import tsx --import @attakk/mocks/register\" astro dev",
     "check": "astro check",
     "build": "astro build",
     "preview": "astro preview",
@@ -25,8 +26,10 @@
     "typescript": "^6.0.3"
   },
   "devDependencies": {
+    "@attakk/mocks": "workspace:*",
     "@vitejs/devtools": "0.7.5",
-    "@vitejs/devtools-oxc": "0.7.5"
+    "@vitejs/devtools-oxc": "0.7.5",
+    "tsx": "^4.23.13"
   },
   "lumos": {
     "version": "0.0.3",

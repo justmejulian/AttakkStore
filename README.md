@@ -9,6 +9,7 @@ independently deployed apps in one pnpm monorepo.
 | `apps/api`       | API   | Node + Hono + better-sqlite3 _(later)_ | The database, QR bills, email, uploads |
 | `apps/admin`     | Admin | Node + Hono, server-rendered _(later)_ | Order and product screens              |
 | `packages/types` | Types | TypeScript + zod                       | Shared types and validation schemas    |
+| `packages/mocks` | Mocks | MSW + fixtures _(dev only)_            | Fake API for shop/admin, contract test |
 
 `apps/api` and `apps/admin` are scaffolded in a later milestone. `apps/shop` is
 seeded from a fresh [Lumos](https://lumosframework.com/docs/) scaffold (Astro 7,
@@ -73,6 +74,53 @@ ln -sfn "$(brew --prefix)/bin/docker-compose" ~/.docker/cli-plugins/docker-compo
 
 Without `buildx`, Docker falls back to the classic builder, which does not
 understand `--mount` and the build fails.
+
+## Mock API
+
+`packages/mocks` is a fake of the API, so the shop and admin can be developed
+before the API is up (or without a database, email or the QR-bill deps). Start
+either app in mock mode instead of the plain `dev`:
+
+```sh
+pnpm --filter @attakk/shop dev:mock     # shop against the fake API
+pnpm --filter @attakk/admin dev:mock    # admin against the fake API
+```
+
+Each `dev:mock` sets `MOCK_API=1` and preloads a small module that starts
+[MSW](https://mswjs.io/)'s `setupServer` in the app's Node process before the
+app runs. From then on the app's own server-side `fetch("<API_URL>/drops")`
+calls are answered by canned fixtures — there is no mock-mode branch in the
+app's code, and the plain `dev` script is untouched. Requests to a route nobody
+mocked warn and fall through, so real endpoints still reach a running API.
+
+The package exports the pieces too: `handlers` and the fixtures (`liveDrops`,
+`createdOrder`, `uploadedImage`, …) from `@attakk/mocks`, and `startMockApi()` /
+`server` from `@attakk/mocks/node` for a test to drive directly (override a
+response for one test with `server.use(...)`). It is a **dev dependency** —
+resolved through the `source` export condition like `packages/types`, never
+built to `dist`, and pruned from every production image by `pnpm deploy --prod`.
+
+Everything is typed against `packages/types`, so a fixture that no longer
+matches the API's types fails to compile. The `POST /orders` handler goes
+further and reuses the real zod schema and the fixtures' size data, so it
+rejects a malformed or duplicate cart with the same 400, and an unsellable
+product or wrong/missing size with the same 422, as the API. Its successful
+responses are canned, though — a clean checkout always returns the same order,
+whatever the cart.
+
+### Keeping the mock honest
+
+Types catch a renamed or dropped **field**, but not a changed **value** or
+**status code** — a mock can quietly say `200` where the API now says `404`, or
+carry a price the API stopped returning, and nothing complains until the real
+API is wired in. To stop that, the API has a contract test
+(`apps/api/src/contract.test.ts`): it loads these same fixtures into a real
+database, calls its own real endpoints, and checks the responses come back
+equal to the fixtures. `packages/mocks` has the mirror image
+(`handlers.test.ts`): it checks the handlers hand back those same fixtures and
+status codes. So if the API and the fixtures ever disagree, one of the two
+suites fails and names which side moved — before a consumer is built on a stale
+mock. Both run under the normal `pnpm test`.
 
 ## Deploying with Dokku
 

@@ -1,0 +1,16 @@
+{
+  "comment": "Check only — this package is never emitted. Its consumers (the shop, admin and the API's contract test) resolve it to its TypeScript source through the `source` export condition and compile it in their own graph, so there is no build step and no dist.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "customConditions": ["source"],
+    "types": ["node"]
+  },
+  "include": ["src/**/*"]
+}

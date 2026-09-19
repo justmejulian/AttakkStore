@@ -27,6 +27,7 @@
     "swissqrbill": "^4.4.1"
   },
   "devDependencies": {
+    "@attakk/mocks": "workspace:*",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.2",
     "@types/pdfkit": "^0.17.6",

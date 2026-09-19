@@ -1,0 +1,34 @@
+{
+  "name": "@attakk/mocks",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./node": {
+      "source": "./src/node.ts",
+      "default": "./src/node.ts"
+    },
+    "./register": {
+      "source": "./src/register.ts",
+      "default": "./src/register.ts"
+    }
+  },
+  "comment": "Dev-only: the shop and admin register these MSW handlers so they can be built without the API running, and the API replays the fixtures through its real routes as a contract test. Never built to dist and never a production dependency — consumers resolve it through the `source` export condition, exactly like @attakk/types, and pull it in as a devDependency so `pnpm deploy --prod` prunes it and msw from every image.",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "tsx --conditions=source --test \"src/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@attakk/types": "workspace:*",
+    "msw": "^2.15.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "tsx": "^4.23.13",
+    "typescript": "^6.0.3"
+  }
+}
