@@ -100,8 +100,17 @@ export function derivativeWidths(intrinsic: number): number[] {
 // API from the decoded file, not the extension (see storedExt in images.ts).
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
+// Longest an image's alt text may be. Generous for a real description but a
+// bound all the same, since alt is free text that ends up in public responses.
+// Shared so the admin's form and the API enforce the same ceiling.
+export const MAX_ALT_LEN = 500;
+
 export interface ProductWithSizes extends Product {
   sizes: ProductSize[];
+  // Ordered by the admin (sort, then id). The first is the card and gallery
+  // lead; an empty array is a product with no photo yet, which the shop renders
+  // with its silhouette fallback.
+  images: ProductImage[];
 }
 
 export interface DropWithProducts extends Drop {

@@ -30,6 +30,19 @@ const deleteStmt = db.prepare(
   `DELETE FROM product_images WHERE id = ? RETURNING ${IMAGE_COLUMNS}`,
 );
 
+// Uploads attach to any product, not only the live ones the catalogue exposes,
+// so this is a plain existence check rather than a catalogue read — the admin
+// adds photos to a draft product before it goes live.
+const productExistsStmt = db.prepare(`SELECT 1 FROM products WHERE id = ?`);
+
+// How many rows still point at a content hash. Filenames are the hash, so the
+// same bytes uploaded twice share one set of files on disk; the delete route
+// checks this after removing a row and only unlinks the files when nothing else
+// references them, so deleting one image never breaks another.
+const countByHashStmt = db.prepare(
+  `SELECT count(*) AS n FROM product_images WHERE hash = ?`,
+);
+
 export function listProductImages(productId: number): ProductImage[] {
   return listForProductStmt.all(productId) as ProductImage[];
 }
@@ -52,4 +65,12 @@ export function addProductImage(image: NewProductImage): ProductImage {
 // to unlink the files off disk — or undefined if the id was already gone.
 export function deleteProductImage(id: number): ProductImage | undefined {
   return deleteStmt.get(id) as ProductImage | undefined;
+}
+
+export function productExists(id: number): boolean {
+  return productExistsStmt.get(id) !== undefined;
+}
+
+export function countProductImagesByHash(hash: string): number {
+  return (countByHashStmt.get(hash) as { n: number }).n;
 }

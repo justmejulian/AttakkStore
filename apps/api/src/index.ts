@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { db } from "./db.js";
 import { catalog } from "./routes/catalog.js";
+import { images } from "./routes/images.js";
 import { orders } from "./routes/orders.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
@@ -29,6 +30,10 @@ app.route("/", catalog);
 // The write path: POST /orders prices the cart server-side and creates the
 // order with its RF reference.
 app.route("/", orders);
+
+// The admin's image writes: attach a processed photo to a product, or remove
+// one. Reached over the internal network only.
+app.route("/", images);
 
 serve({ fetch: app.fetch, port: PORT }, ({ port }) => {
   console.log(`api listening on :${port}`);

@@ -6,6 +6,7 @@ import type {
   ProductWithSizes,
 } from "@attakk/types";
 import { db } from "../db.js";
+import { listProductImages } from "./images.js";
 
 // The catalogue reads the shop makes. All SQL lives here — route handlers call
 // these and serve the typed result straight back. Only public rows ever leave:
@@ -59,7 +60,8 @@ const sizesForProductStmt = db.prepare(
 
 function withSizes(product: Product): ProductWithSizes {
   const sizes = sizesForProductStmt.all(product.id) as ProductSize[];
-  return { ...product, sizes };
+  const images = listProductImages(product.id);
+  return { ...product, sizes, images };
 }
 
 function withProducts(drop: Drop): DropWithProducts {
