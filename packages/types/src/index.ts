@@ -13,7 +13,13 @@
 import { z } from "zod";
 
 export type DropStatus = "draft" | "live" | "archived";
-export type ProductStatus = "draft" | "live" | "hidden";
+
+// The three states a product moves through. One tuple so the type, the DB check
+// constraint's mirror, and the admin's write zod all read from a single list
+// rather than three that could drift (the same shape ORDER_STATUSES gives orders).
+export const PRODUCT_STATUSES = ["draft", "live", "hidden"] as const;
+export type ProductStatus = (typeof PRODUCT_STATUSES)[number];
+
 export type ThemeBase = "light" | "dark";
 
 // The fixed set of faces the site ships — an arbitrary name would mean loading
@@ -128,6 +134,50 @@ export interface AdminProductRow extends Product {
   drop_status: DropStatus;
   ordered_count: number;
 }
+
+/* ----------------------------------------------------------- product writes */
+
+// Field bounds for the admin's product create/edit form, shared so the form's
+// HTML5 hints and the API's validation agree on one definition. Generous — these
+// are integrity caps on free text, not the real content check — but present, so a
+// runaway paste can't bloat a row. Slugs are the storefront URL, so they are
+// stored (they must survive a rename) and constrained to a lowercase, hyphenated
+// form rather than derived from the name.
+export const MAX_SLUG_LEN = 100;
+export const MAX_PRODUCT_NAME_LEN = 200;
+export const MAX_PRODUCT_DESCRIPTION_LEN = 5000;
+export const MAX_FIT_LEN = 100;
+export const MAX_FIT_URL_LEN = 500;
+// A lowercase, hyphen-separated slug: runs of [a-z0-9] joined by single hyphens,
+// no leading/trailing/double hyphen. The admin form prefills it from the name,
+// but it is a real stored field the admin can override, not a derived one.
+export const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+// The editable fields of a product, validated with the same zod the API enforces
+// so the admin form and the endpoint agree on what is allowed. drop_id is absent:
+// a product is created into a drop and stays there — moving one between drops is
+// not an edit this form makes. Prices are integer rappen, entered and stored the
+// same way they reach the QR bill, so nothing is ever converted.
+export const productInput = z.object({
+  slug: z.string().trim().min(1).max(MAX_SLUG_LEN).regex(SLUG_PATTERN),
+  name: z.string().trim().min(1).max(MAX_PRODUCT_NAME_LEN),
+  description: z.string().max(MAX_PRODUCT_DESCRIPTION_LEN).default(""),
+  price_rappen: z.number().int().min(0),
+  fit: z.string().max(MAX_FIT_LEN).default(""),
+  fit_url: z.string().max(MAX_FIT_URL_LEN).default(""),
+  // The pre-order target: at least one, so a drop can never need zero to produce.
+  min_orders: z.number().int().positive(),
+  status: z.enum(PRODUCT_STATUSES),
+  sort: z.number().int().min(0).default(0),
+});
+export type ProductInput = z.infer<typeof productInput>;
+
+// Creating a product also names the drop it belongs to; the API checks the drop
+// exists before inserting. Everything else is the shared editable shape.
+export const productCreateInput = productInput.extend({
+  drop_id: z.number().int().positive(),
+});
+export type ProductCreateInput = z.infer<typeof productCreateInput>;
 
 /* ------------------------------------------------------------------ orders */
 

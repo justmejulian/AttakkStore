@@ -203,6 +203,69 @@ test("GET /admin/products lists the rows and 404s an unknown detail id", async (
   assert.equal((await fetch(`${base}/admin/products/999`)).status, 404);
 });
 
+test("POST /admin/products mirrors the API's create branches", async () => {
+  const body = {
+    drop_id: 1,
+    slug: "brand-new",
+    name: "Brand New",
+    price_rappen: 4200,
+    min_orders: 2,
+    status: "draft",
+  };
+  const created = await post("/admin/products", body);
+  assert.equal(created.status, 201);
+  assert.equal(((await created.json()) as { slug: string }).slug, "brand-new");
+
+  // A malformed body, an unknown drop and a taken slug: the API's 400/422/409.
+  assert.equal((await post("/admin/products", { slug: "x" })).status, 400);
+  assert.equal(
+    (await post("/admin/products", { ...body, drop_id: 999 })).status,
+    422,
+  );
+  assert.equal(
+    (await post("/admin/products", { ...body, slug: "redline-jersey" })).status,
+    409,
+  );
+});
+
+test("PATCH /admin/products/:id mirrors the API's edit branches", async () => {
+  const ok = await patch("/admin/products/12", {
+    slug: "origins-tee",
+    name: "Renamed",
+    price_rappen: 7000,
+    min_orders: 1,
+    status: "live",
+  });
+  assert.equal(ok.status, 200);
+  assert.equal(((await ok.json()) as { name: string }).name, "Renamed");
+
+  // Another product's slug is a 409; a missing product a 404.
+  assert.equal(
+    (
+      await patch("/admin/products/12", {
+        slug: "redline-jersey",
+        name: "x",
+        price_rappen: 1,
+        min_orders: 1,
+        status: "draft",
+      })
+    ).status,
+    409,
+  );
+  assert.equal(
+    (
+      await patch("/admin/products/999", {
+        slug: "ghost",
+        name: "x",
+        price_rappen: 1,
+        min_orders: 1,
+        status: "draft",
+      })
+    ).status,
+    404,
+  );
+});
+
 test("image write routes return the stored row and an empty 204", async () => {
   const created = await fetch(`${base}/products/10/images`, { method: "POST" });
   assert.equal(created.status, 201);

@@ -4,6 +4,8 @@ import {
   orderInput,
   orderNoteInput,
   orderStatusInput,
+  productCreateInput,
+  productInput,
 } from "@attakk/types";
 import { http, HttpResponse } from "msw";
 import {
@@ -76,6 +78,19 @@ const productsById = new Map(
   allDrops.flatMap((d) => d.products).map((p) => [p.id, p] as const),
 );
 
+// The drops a product can be created into, and the slugs already in use — the
+// two things the create/edit handlers check, mirroring the API's drop-exists and
+// slug-unique guards. The mock is stateless, so these are the seeded fixtures.
+const dropIds = new Set(allDrops.map((d) => d.id));
+const productSlugs = new Set(
+  allDrops.flatMap((d) => d.products).map((p) => p.slug),
+);
+
+// The id a created product comes back with. The API assigns the next rowid; the
+// mock is stateless, so it returns this fixed, obviously-synthetic id instead,
+// distinct from any seeded product's.
+const MOCK_NEW_PRODUCT_ID = 900;
+
 function isOrderStatus(value: string): boolean {
   return (ORDER_STATUSES as readonly string[]).includes(value);
 }
@@ -104,11 +119,56 @@ export const handlers = [
   // full product with its sizes and images, keyed off the fixtures by id.
   http.get("*/admin/products", () => HttpResponse.json(adminProducts)),
 
+  // Create a product. The real zod does the shape check, so a bad body is a 400;
+  // then a drop that does not exist is a 422 and a slug already in use a 409, the
+  // same codes the API gives. On success a synthesized row (fresh id, empty sizes
+  // and images) comes back 201.
+  http.post("*/admin/products", async ({ request }) => {
+    const parsed = productCreateInput.safeParse(
+      await request.json().catch(() => null),
+    );
+    if (!parsed.success) {
+      return HttpResponse.json({ error: "invalid" }, { status: 400 });
+    }
+    if (!dropIds.has(parsed.data.drop_id)) {
+      return HttpResponse.json({ error: "drop_not_found" }, { status: 422 });
+    }
+    if (productSlugs.has(parsed.data.slug)) {
+      return HttpResponse.json({ error: "slug_taken" }, { status: 409 });
+    }
+    return HttpResponse.json(
+      { id: MOCK_NEW_PRODUCT_ID, ...parsed.data, sizes: [], images: [] },
+      { status: 201 },
+    );
+  }),
+
   http.get("*/admin/products/:id", ({ params }) => {
     const product = productsById.get(Number(params.id));
     return product
       ? HttpResponse.json(product)
       : HttpResponse.json({ error: "not_found" }, { status: 404 });
+  }),
+
+  // Edit a product. A missing product is a 404, a bad body a 400, a slug taken by
+  // a DIFFERENT product a 409 — re-saving a product with its own slug is fine.
+  http.patch("*/admin/products/:id", async ({ params, request }) => {
+    const product = productsById.get(Number(params.id));
+    if (!product) {
+      return HttpResponse.json({ error: "not_found" }, { status: 404 });
+    }
+    const parsed = productInput.safeParse(
+      await request.json().catch(() => null),
+    );
+    if (!parsed.success) {
+      return HttpResponse.json({ error: "invalid" }, { status: 400 });
+    }
+    const clash = [...productsById.values()].some(
+      (p) => p.id !== product.id && p.slug === parsed.data.slug,
+    );
+    if (clash) {
+      return HttpResponse.json({ error: "slug_taken" }, { status: 409 });
+    }
+    return HttpResponse.json({ ...product, ...parsed.data });
   }),
 
   http.get("*/products/:slug", ({ params }) => {
