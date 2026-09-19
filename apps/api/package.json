@@ -21,6 +21,7 @@
     "hono": "^4.13.8"
   },
   "devDependencies": {
+    "@attakk/types": "workspace:*",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.2",
     "tsx": "^4.23.13",

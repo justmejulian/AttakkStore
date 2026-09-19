@@ -121,6 +121,22 @@ const migrations: Migration[] = [
       );
     `,
   },
+  {
+    version: 2,
+    name: "slugs",
+    // URLs are slugs, not ids — /drops/redline, /products/redline-jersey — and
+    // they must survive a rename, so the slug is stored rather than derived
+    // from the name. SQLite cannot add a UNIQUE column with ALTER TABLE, so the
+    // uniqueness is a separate index. The '' default only exists because a
+    // NOT NULL column needs one; the admin always sets a real, unique slug.
+    up: `
+      ALTER TABLE drops ADD COLUMN slug TEXT NOT NULL DEFAULT '';
+      CREATE UNIQUE INDEX drops_slug ON drops (slug);
+
+      ALTER TABLE products ADD COLUMN slug TEXT NOT NULL DEFAULT '';
+      CREATE UNIQUE INDEX products_slug ON products (slug);
+    `,
+  },
 ];
 
 export function migrate(database: Database): void {

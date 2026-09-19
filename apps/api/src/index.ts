@@ -1,14 +1,12 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { db } from "./db.js";
-import { migrate } from "./migrate.js";
+import { catalog } from "./routes/catalog.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
 
-// Bring the schema up to date before serving. On a fresh volume this creates
-// every table; on one already migrated it is a no-op.
-migrate(db);
-
+// Opening the connection (in ./db) already migrated the schema, so the server
+// is ready to serve as soon as this module loads.
 const app = new Hono();
 
 // Liveness probe. Reading sqlite_version exercises the better-sqlite3 native
@@ -22,6 +20,10 @@ app.get("/health", (c) => {
   const schema = db.pragma("user_version", { simple: true }) as number;
   return c.json({ status: "ok", service: "api", sqlite: version, schema });
 });
+
+// Public catalogue reads for the storefront: /drops, /drops/:slug,
+// /products/:slug.
+app.route("/", catalog);
 
 serve({ fetch: app.fetch, port: PORT }, ({ port }) => {
   console.log(`api listening on :${port}`);
