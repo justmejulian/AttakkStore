@@ -129,11 +129,19 @@ const migrations: Migration[] = [
     // from the name. SQLite cannot add a UNIQUE column with ALTER TABLE, so the
     // uniqueness is a separate index. The '' default only exists because a
     // NOT NULL column needs one; the admin always sets a real, unique slug.
+    //
+    // A database already carrying rows would give every one of them the same ''
+    // default, and the unique index would then fail to build. So each existing
+    // row is backfilled with a placeholder slug from its id — unique by
+    // construction — for the admin to replace later. On a fresh volume the
+    // UPDATEs match nothing and change nothing.
     up: `
       ALTER TABLE drops ADD COLUMN slug TEXT NOT NULL DEFAULT '';
+      UPDATE drops SET slug = 'drop-' || id;
       CREATE UNIQUE INDEX drops_slug ON drops (slug);
 
       ALTER TABLE products ADD COLUMN slug TEXT NOT NULL DEFAULT '';
+      UPDATE products SET slug = 'product-' || id;
       CREATE UNIQUE INDEX products_slug ON products (slug);
     `,
   },
