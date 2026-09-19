@@ -11,13 +11,14 @@ const TABLES = [
   "order_items",
   "admin_users",
   "settings",
+  "product_images",
 ];
 
 test("migrate creates every table and stamps the schema version", () => {
   const db = new Database(":memory:");
   migrate(db);
 
-  assert.equal(db.pragma("user_version", { simple: true }), 2);
+  assert.equal(db.pragma("user_version", { simple: true }), 3);
   const names = (
     db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as {
       name: string;
@@ -31,7 +32,7 @@ test("migrate is idempotent", () => {
   const db = new Database(":memory:");
   migrate(db);
   assert.doesNotThrow(() => migrate(db));
-  assert.equal(db.pragma("user_version", { simple: true }), 2);
+  assert.equal(db.pragma("user_version", { simple: true }), 3);
   db.close();
 });
 
@@ -62,7 +63,7 @@ test("migrates a v1 database that already holds rows", () => {
   product.run("Cap");
 
   assert.doesNotThrow(() => migrate(db));
-  assert.equal(db.pragma("user_version", { simple: true }), 2);
+  assert.equal(db.pragma("user_version", { simple: true }), 3);
 
   // Every backfilled slug is non-empty and unique, so the admin can find and
   // replace them and the unique index holds in the meantime.

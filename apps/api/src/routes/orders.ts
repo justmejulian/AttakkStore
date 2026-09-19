@@ -18,10 +18,12 @@ orders.post("/orders", async (c) => {
 
   try {
     const order = createOrder(parsed.data);
-    // Mail the QR bill and notify the shop. Best-effort inside — a mail failure
-    // is logged, never undoes the committed order or fails the shop's request,
-    // since the receipt page reads the order back from the database regardless.
-    await sendOrderConfirmation(order);
+    // Dispatch the QR bill and shop notification in the background — never
+    // awaited, so a slow or hung SMTP server can't stall the checkout response.
+    // sendOrderConfirmation catches everything internally and never rejects, so
+    // this is safe to leave un-awaited; the receipt page reads the order back
+    // from the database regardless of whether the mail has gone out yet.
+    void sendOrderConfirmation(order);
     return c.json(order, 201);
   } catch (err) {
     // A refused line (unknown product, wrong size) is the request's fault, not

@@ -145,6 +145,31 @@ const migrations: Migration[] = [
       CREATE UNIQUE INDEX products_slug ON products (slug);
     `,
   },
+  {
+    version: 3,
+    name: "product_images",
+    // Product photos are processed once on upload and land on the same volume as
+    // the database. Only the derived facts live here — the content hash is the
+    // filename stem, so the original is {hash}.{ext} and each webp derivative is
+    // {hash}-{width}.webp on disk; the shop rebuilds a srcset from the hash and
+    // the intrinsic width against a shared width list, so no per-width row is
+    // needed. The placeholder is a tiny blurred webp inlined as a data URI, small
+    // enough to travel in the row and paint before the real image loads.
+    up: `
+      CREATE TABLE product_images (
+        id          INTEGER PRIMARY KEY,
+        product_id  INTEGER NOT NULL REFERENCES products (id) ON DELETE CASCADE,
+        hash        TEXT    NOT NULL,
+        ext         TEXT    NOT NULL,
+        alt         TEXT    NOT NULL DEFAULT '',
+        placeholder TEXT    NOT NULL DEFAULT '',
+        width       INTEGER NOT NULL,
+        height      INTEGER NOT NULL,
+        sort        INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX product_images_product_id ON product_images (product_id);
+    `,
+  },
 ];
 
 export function migrate(database: Database): void {

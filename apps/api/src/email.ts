@@ -36,7 +36,7 @@ export function emailConfigFromEnv(
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS || !SMTP_FROM) return null;
   return {
     host: SMTP_HOST,
-    port: Number(env.SMTP_PORT ?? 465),
+    port: Number(env.SMTP_PORT || 465),
     user: SMTP_USER,
     pass: SMTP_PASS,
     from: SMTP_FROM,
@@ -114,6 +114,12 @@ export function buildNotificationEmail(
 // notification. Never throws: an unconfigured or failing mailer is logged and
 // the order — already committed — stands. Config is injectable so the message
 // building can be exercised without a live SMTP server.
+//
+// The shop notification is independent of the QR bill: a creditor/PDF failure
+// drops only the customer's confirmation, so the shop still learns of the order.
+// The two sends run concurrently, and each failure is logged on its own so one
+// does not mask the other. Explicit timeouts keep a hung SMTP server from tying
+// up this background task indefinitely.
 export async function sendOrderConfirmation(
   order: OrderWithItems,
   config: EmailConfig | null = emailConfigFromEnv(),
@@ -124,17 +130,34 @@ export async function sendOrderConfirmation(
     );
     return;
   }
+
+  const transport = nodemailer.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: config.port === 465, // implicit TLS on 465, STARTTLS otherwise
+    auth: { user: config.user, pass: config.pass },
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 20_000,
+  });
+
+  const mails: SendMailOptions[] = [buildNotificationEmail(config, order)];
   try {
     const pdf = await generateQrBill(order, getCreditor());
-    const transport = nodemailer.createTransport({
-      host: config.host,
-      port: config.port,
-      secure: config.port === 465, // implicit TLS on 465, STARTTLS otherwise
-      auth: { user: config.user, pass: config.pass },
-    });
-    await transport.sendMail(buildConfirmationEmail(config, order, pdf));
-    await transport.sendMail(buildNotificationEmail(config, order));
+    mails.push(buildConfirmationEmail(config, order, pdf));
   } catch (err) {
-    console.error(`failed to send mail for order ${order.reference}:`, err);
+    console.error(`failed to build QR bill for order ${order.reference}:`, err);
+  }
+
+  const results = await Promise.allSettled(
+    mails.map((mail) => transport.sendMail(mail)),
+  );
+  for (const result of results) {
+    if (result.status === "rejected") {
+      console.error(
+        `failed to send mail for order ${order.reference}:`,
+        result.reason,
+      );
+    }
   }
 }

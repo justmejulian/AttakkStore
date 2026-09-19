@@ -7,8 +7,17 @@ import { migrate } from "./migrate.js";
 // database or a read-only mount expects it. Defaults to a local ./data in dev;
 // compose and Dokku point DATA_DIR at the mounted volume.
 export const DATA_DIR = process.env.DATA_DIR ?? "./data";
+
+// Only the webp derivatives the browser is meant to fetch live under uploads/ —
+// that is the directory mounted read-only into the shop. The untouched
+// originals sit beside it in originals/, kept so a size or format can be
+// regenerated later but deliberately NOT on the shop's mount: an original still
+// carries the EXIF the derivatives strip (a phone photo's GPS), and the browser
+// only ever references the derivatives.
 export const UPLOADS_DIR = `${DATA_DIR}/uploads`;
+export const ORIGINALS_DIR = `${DATA_DIR}/originals`;
 mkdirSync(UPLOADS_DIR, { recursive: true });
+mkdirSync(ORIGINALS_DIR, { recursive: true });
 
 // One connection for the process. WAL lets the shop read while the admin
 // writes; foreign_keys must be turned on per connection or the constraints in

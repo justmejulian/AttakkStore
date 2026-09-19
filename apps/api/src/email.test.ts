@@ -59,6 +59,19 @@ test("reads SMTP config from the environment with sensible defaults", () => {
   assert.equal(cfg.notifyTo, "shop@atk-collective.ch"); // falls back to the sender
 });
 
+test("falls back to port 465 when SMTP_PORT is blank", () => {
+  // An exported-but-empty SMTP_PORT must not become port 0; `|| 465` catches the
+  // empty string that `?? 465` would let through.
+  const cfg = emailConfigFromEnv({
+    SMTP_HOST: "mail.example.com",
+    SMTP_USER: "u",
+    SMTP_PASS: "p",
+    SMTP_FROM: "shop@example.com",
+    SMTP_PORT: "",
+  });
+  assert.equal(cfg?.port, 465);
+});
+
 test("is unconfigured when an essential field is missing", () => {
   // A half-set environment must not send: no SMTP_PASS means null, so the caller
   // skips rather than opening a transport that would fail to authenticate.

@@ -61,6 +61,45 @@ export interface ProductSize {
   sort: number;
 }
 
+// A processed product photo. `hash` is the content hash of the original and the
+// stem of every file on disk: the original is `{hash}.{ext}`, each derivative is
+// `{hash}-{width}.webp`. The shop builds a srcset by filtering IMAGE_WIDTHS to
+// those no wider than `width` (never upscaling) — so the produced widths are
+// derivable from this row without a per-width column. `placeholder` is a tiny
+// blurred webp as a data URI, painted while the real image loads.
+export interface ProductImage {
+  id: number;
+  hash: string;
+  ext: string;
+  alt: string;
+  placeholder: string;
+  width: number;
+  height: number;
+  sort: number;
+}
+
+// The widths the shop renders and the API generates a webp derivative for. A
+// derivative is only produced when the source is at least that wide, so a small
+// original is never upscaled. Shared so the shop's srcset and the API's output
+// come from one list rather than two that drift.
+export const IMAGE_WIDTHS = [400, 800, 1200, 1600] as const;
+
+// The exact derivative widths for a source of the given intrinsic width. Both
+// the API (deciding what to generate) and the shop (building a srcset from a
+// stored width, without touching disk) call this, so the file that exists and
+// the file the markup asks for are guaranteed to agree. A source narrower than
+// the smallest width still gets one derivative at its own width rather than
+// being upscaled.
+export function derivativeWidths(intrinsic: number): number[] {
+  const widths = IMAGE_WIDTHS.filter((w) => w <= intrinsic);
+  return widths.length > 0 ? widths : [intrinsic];
+}
+
+// Upload size ceiling. A phone photo is a few MB; this leaves headroom without
+// letting a decode balloon memory. Which formats are accepted is decided by the
+// API from the decoded file, not the extension (see storedExt in images.ts).
+export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
 export interface ProductWithSizes extends Product {
   sizes: ProductSize[];
 }
