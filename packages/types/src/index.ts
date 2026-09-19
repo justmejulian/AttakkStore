@@ -195,3 +195,40 @@ export interface Order {
 export interface OrderWithItems extends Order {
   items: OrderItem[];
 }
+
+/* ------------------------------------------------------------------- admin */
+
+// Length bounds on admin credentials, shared so the login schema and the
+// seed-user CLI agree: a password the CLI accepts must be one the login schema
+// will let through, or an admin could be created and then never able to sign in.
+// Generous — the real check is the scrypt hash, not the length — but present,
+// since a password caps how much a login pays to scrypt and username is free
+// text. MIN_PASSWORD_LEN is the floor the CLI enforces when setting a password;
+// login itself accepts any non-empty length, since it must verify whatever was
+// already set.
+export const MIN_PASSWORD_LEN = 8;
+export const MAX_PASSWORD_LEN = 200;
+export const MAX_USERNAME_LEN = 100;
+
+// What the admin posts to the API's login route. The admin holds no database,
+// so the API is the only place a password is checked; this is the one shape both
+// sides agree on.
+export const loginInput = z.object({
+  username: z.string().trim().min(1).max(MAX_USERNAME_LEN),
+  password: z.string().min(1).max(MAX_PASSWORD_LEN),
+});
+export type LoginInput = z.infer<typeof loginInput>;
+
+// The public shape of an admin user: everything but the password hash, which
+// never leaves the API. Field names mirror the admin_users columns, so the login
+// response is the row with the hash removed and nothing else translated. `active`
+// is the stored 0/1 integer; a login only ever succeeds for an active user.
+export interface AdminUser {
+  id: number;
+  username: string;
+  active: number;
+  created_at: string;
+  // The login *before* this one — the route returns the row as it read it and
+  // then stamps the new time — so it is null for a user who has never logged in.
+  last_login_at: string | null;
+}

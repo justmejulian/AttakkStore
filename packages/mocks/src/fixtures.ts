@@ -1,4 +1,5 @@
 import type {
+  AdminUser,
   DropWithProducts,
   OrderInput,
   OrderWithItems,
@@ -233,3 +234,25 @@ export const uploadedImage: ProductImage = {
 // rows to read. The live subset (liveDrops) is derived from this by the API's
 // own status filter, not duplicated here.
 export const allDrops: DropWithProducts[] = [redlineDrop, originsDrop];
+
+/* ------------------------------------------------------------------- admin */
+
+// The admin user the login mock accepts. The API's contract test seeds this row
+// (hashing adminCredentials.password) and replays a login through the real
+// route, so the mock's 200 and 401 match the API's. `last_login_at` is null: the
+// route returns the row as it read it, reflecting the login before this one,
+// which for a never-logged-in user is none.
+export const adminUser: AdminUser = {
+  id: 1,
+  username: "admin",
+  active: 1,
+  created_at: "2026-01-01T00:00:00.000Z",
+  last_login_at: null,
+};
+
+// The credentials that unlock adminUser. Only ever a fixture — the real first
+// admin is created by the seed-user CLI with a password of its own.
+export const adminCredentials = {
+  username: "admin",
+  password: "correct-horse-battery-staple",
+};

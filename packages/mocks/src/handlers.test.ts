@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { setupServer } from "msw/node";
-import { createdOrder, liveDrops, uploadedImage } from "./fixtures.js";
+import {
+  adminCredentials,
+  adminUser,
+  createdOrder,
+  liveDrops,
+  uploadedImage,
+} from "./fixtures.js";
 import { handlers } from "./handlers.js";
 
 // The mock's own side of the contract: that the handlers actually intercept
@@ -83,6 +89,22 @@ test("POST /orders mirrors the API's rejections, code for code", async () => {
     assert.equal(res.status, 422, `${code} should be 422`);
     assert.deepEqual(await res.json(), { error: code });
   }
+});
+
+test("POST /admin/login accepts the fixture credentials and refuses the rest", async () => {
+  const ok = await post("/admin/login", adminCredentials);
+  assert.equal(ok.status, 200);
+  assert.deepEqual(await ok.json(), adminUser);
+
+  const wrong = await post("/admin/login", {
+    username: adminCredentials.username,
+    password: "nope",
+  });
+  assert.equal(wrong.status, 401);
+  assert.deepEqual(await wrong.json(), { error: "invalid_credentials" });
+
+  // A body the schema rejects is the same 400 the API gives.
+  assert.equal((await post("/admin/login", { username: "x" })).status, 400);
 });
 
 test("image write routes return the stored row and an empty 204", async () => {

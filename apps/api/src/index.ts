@@ -1,6 +1,7 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { db } from "./db.js";
+import { admin } from "./routes/admin.js";
 import { catalog } from "./routes/catalog.js";
 import { images } from "./routes/images.js";
 import { orders } from "./routes/orders.js";
@@ -34,6 +35,10 @@ app.route("/", orders);
 // The admin's image writes: attach a processed photo to a product, or remove
 // one. Reached over the internal network only.
 app.route("/", images);
+
+// The admin's authentication: POST /admin/login verifies a username and password
+// against the stored scrypt hash and returns the user for the admin's session.
+app.route("/", admin);
 
 serve({ fetch: app.fetch, port: PORT }, ({ port }) => {
   console.log(`api listening on :${port}`);

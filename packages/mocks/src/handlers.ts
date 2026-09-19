@@ -1,6 +1,8 @@
-import { orderInput } from "@attakk/types";
+import { loginInput, orderInput } from "@attakk/types";
 import { http, HttpResponse } from "msw";
 import {
+  adminCredentials,
+  adminUser,
   createdOrder,
   liveDrops,
   originsDrop,
@@ -98,4 +100,23 @@ export const handlers = [
   ),
 
   http.delete("*/images/:id", () => new HttpResponse(null, { status: 204 })),
+
+  // The admin's login. The real zod schema does the shape check, so a malformed
+  // body is a 400 here for the same reason it is at the API; a matching username
+  // and password return the user, anything else the same 401 the API gives — the
+  // API verifies a scrypt hash, the mock a fixed pair, but the answers agree.
+  http.post("*/admin/login", async ({ request }) => {
+    const parsed = loginInput.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) {
+      return HttpResponse.json({ error: "invalid" }, { status: 400 });
+    }
+    const { username, password } = parsed.data;
+    if (
+      username === adminCredentials.username &&
+      password === adminCredentials.password
+    ) {
+      return HttpResponse.json(adminUser);
+    }
+    return HttpResponse.json({ error: "invalid_credentials" }, { status: 401 });
+  }),
 ];

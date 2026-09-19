@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import {
+  adminCredentials,
+  adminUser,
   allDrops,
   createdOrder,
   duplicateVariantRejection,
@@ -13,6 +15,7 @@ import {
   type OrderRejection,
 } from "@attakk/mocks";
 import type { Database } from "better-sqlite3";
+import { hashPassword } from "./password.js";
 import { openTempApi } from "./test-support.js";
 
 // The contract test @attakk/mocks describes: replay every fixture through the
@@ -24,8 +27,10 @@ import { openTempApi } from "./test-support.js";
 
 const { db, cleanup } = await openTempApi();
 seedFromFixtures(db);
+seedAdminUser(db);
 const { catalog } = await import("./routes/catalog.js");
 const { orders } = await import("./routes/orders.js");
+const { admin } = await import("./routes/admin.js");
 
 after(() => cleanup());
 
@@ -79,6 +84,27 @@ function seedFromFixtures(database: Database): void {
     }
   });
   seed();
+}
+
+// Seed the admin fixture as a real row: its public fields verbatim, plus a fresh
+// scrypt hash of the fixture password. The hash is generated here rather than
+// fixed because a stored hash carries a random salt — what the login must match
+// is the password, which the real verify then checks against this hash.
+function seedAdminUser(database: Database): void {
+  database
+    .prepare(
+      `INSERT INTO admin_users
+         (id, username, password_hash, active, created_at, last_login_at)
+       VALUES (@id, @username, @password_hash, @active, @created_at, @last_login_at)`,
+    )
+    .run({
+      id: adminUser.id,
+      username: adminUser.username,
+      password_hash: hashPassword(adminCredentials.password),
+      active: adminUser.active,
+      created_at: adminUser.created_at,
+      last_login_at: adminUser.last_login_at,
+    });
 }
 
 test("GET /drops returns the live-collections fixture verbatim", async () => {
@@ -136,9 +162,50 @@ test("POST /orders rejects the fixture carts with the fixture status and code", 
   }
 });
 
+test("POST /admin/login returns the user fixture on the right credentials", async () => {
+  const res = await postJson(admin, "/admin/login", adminCredentials);
+  assert.equal(res.status, 200);
+  // Verbatim, last_login_at included: the fixture is null and the route returns
+  // the row as it read it, before stamping this login.
+  assert.deepEqual(await res.json(), adminUser);
+});
+
+test("POST /admin/login is 401 on a wrong password and an unknown user", async () => {
+  const wrong = await postJson(admin, "/admin/login", {
+    username: adminCredentials.username,
+    password: "nope",
+  });
+  assert.equal(wrong.status, 401);
+  assert.deepEqual(await wrong.json(), { error: "invalid_credentials" });
+
+  const unknown = await postJson(admin, "/admin/login", {
+    username: "ghost",
+    password: adminCredentials.password,
+  });
+  assert.equal(unknown.status, 401);
+});
+
+test("POST /admin/login is 400 with the mock's body on a malformed request", async () => {
+  // Pins the 400 shape the mock returns to the API's, so the mock cannot drift to
+  // a different code or add fields the shop never sees.
+  const res = await postJson(admin, "/admin/login", { username: "x" });
+  assert.equal(res.status, 400);
+  assert.deepEqual(await res.json(), { error: "invalid" });
+});
+
 function postOrder(body: unknown): Promise<Response> {
+  return postJson(orders, "/orders", body);
+}
+
+function postJson(
+  app: {
+    request: (path: string, init: RequestInit) => Response | Promise<Response>;
+  },
+  path: string,
+  body: unknown,
+): Promise<Response> {
   return Promise.resolve(
-    orders.request("/orders", {
+    app.request(path, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
