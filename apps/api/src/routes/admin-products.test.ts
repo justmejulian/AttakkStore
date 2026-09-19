@@ -225,6 +225,116 @@ test("PATCH /admin/products/:id is 400 for a malformed body", async () => {
   );
 });
 
+test("PUT sizes reconciles insert, rename, reorder, delete and clear", async () => {
+  // Product 13 (draft drop) has no sizes and no orders, so it is safe to churn.
+  const added = await put("/admin/products/13/sizes", {
+    sizes: [
+      { label: "S", sort: 0 },
+      { label: "M", sort: 1 },
+    ],
+  });
+  assert.equal(added.status, 200);
+  let sizes = ((await added.json()) as ProductWithSizes).sizes;
+  assert.deepEqual(
+    sizes.map((s) => s.label),
+    ["S", "M"],
+  );
+  const kept = sizes.find((s) => s.label === "S");
+  assert.ok(kept);
+
+  // Keep S by id (renamed + reordered), drop M, add L.
+  const reconciled = await put("/admin/products/13/sizes", {
+    sizes: [
+      { id: kept.id, label: "S2", sort: 1 },
+      { label: "L", sort: 0 },
+    ],
+  });
+  assert.equal(reconciled.status, 200);
+  sizes = ((await reconciled.json()) as ProductWithSizes).sizes;
+  // Ordered by sort: L (0) then S2 (1); M is gone; S kept its id across the rename.
+  assert.deepEqual(
+    sizes.map((s) => s.label),
+    ["L", "S2"],
+  );
+  assert.equal(sizes.find((s) => s.label === "S2")?.id, kept.id);
+
+  // The empty set clears every (order-free) size.
+  const cleared = await put("/admin/products/13/sizes", { sizes: [] });
+  assert.equal(cleared.status, 200);
+  assert.deepEqual(((await cleared.json()) as ProductWithSizes).sizes, []);
+});
+
+test("PUT sizes handles a label swap without a unique-constraint error", async () => {
+  // Seed a known two-size state, then swap the two labels between the same rows —
+  // the case a naive update trips on UNIQUE(product_id, label) mid-write.
+  const seed = await put("/admin/products/13/sizes", {
+    sizes: [
+      { label: "A", sort: 0 },
+      { label: "B", sort: 1 },
+    ],
+  });
+  const seeded = ((await seed.json()) as ProductWithSizes).sizes;
+  const a = seeded.find((s) => s.label === "A");
+  const b = seeded.find((s) => s.label === "B");
+  assert.ok(a);
+  assert.ok(b);
+
+  const res = await put("/admin/products/13/sizes", {
+    sizes: [
+      { id: a.id, label: "B", sort: 0 },
+      { id: b.id, label: "A", sort: 1 },
+    ],
+  });
+  assert.equal(res.status, 200);
+  assert.deepEqual(
+    ((await res.json()) as ProductWithSizes).sizes.map((s) => s.label),
+    ["B", "A"],
+  );
+});
+
+test("PUT sizes refuses to drop an ordered size (409) or name an unknown one (422)", async () => {
+  const current = (
+    (await (
+      await adminProducts.request("/admin/products/10")
+    ).json()) as ProductWithSizes
+  ).sizes.map((s) => ({ id: s.id, label: s.label, sort: s.sort }));
+
+  // Product 10's M is referenced by the seeded orders, so dropping it is a 409.
+  const dropM = await put("/admin/products/10/sizes", {
+    sizes: current.filter((s) => s.label !== "M"),
+  });
+  assert.equal(dropM.status, 409);
+  assert.deepEqual(await dropM.json(), { error: "size_in_use" });
+
+  // An id that isn't one of product 10's sizes is a 422.
+  const unknown = await put("/admin/products/10/sizes", {
+    sizes: [...current, { id: 99999, label: "XXL", sort: 9 }],
+  });
+  assert.equal(unknown.status, 422);
+  assert.deepEqual(await unknown.json(), { error: "unknown_size" });
+});
+
+test("PUT sizes is 400 for duplicate labels and 404 for a missing product", async () => {
+  const dup = await put("/admin/products/13/sizes", {
+    sizes: [{ label: "S" }, { label: "S" }],
+  });
+  assert.equal(dup.status, 400);
+  assert.equal(
+    (await put("/admin/products/999/sizes", { sizes: [] })).status,
+    404,
+  );
+});
+
+function put(path: string, body: unknown): Promise<Response> {
+  return Promise.resolve(
+    adminProducts.request(path, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  );
+}
+
 function post(path: string, body: unknown): Promise<Response> {
   return Promise.resolve(
     adminProducts.request(path, {

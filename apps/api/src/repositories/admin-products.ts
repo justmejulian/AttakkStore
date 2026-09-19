@@ -5,6 +5,7 @@ import type {
   ProductInput,
   ProductSize,
   ProductWithSizes,
+  SizeInput,
 } from "@attakk/types";
 import { db } from "../db.js";
 import { listProductImages } from "./images.js";
@@ -66,11 +67,14 @@ export function getProductForAdmin(id: number): ProductWithSizes | undefined {
 
 // -------------------------------------------------------------- admin writes
 
-// Why a create or edit was refused, for the reasons the route turns into a 4xx
-// the admin can act on rather than a 500: a slug already in use (products.slug is
-// UNIQUE), or a create naming a drop that does not exist. Anything else (a broken
-// database) stays a thrown 500.
-export type ProductErrorCode = "slug_taken" | "drop_not_found";
+// Why a create, edit or size change was refused, for the reasons the route turns
+// into a 4xx the admin can act on rather than a 500: a slug already in use
+// (products.slug is UNIQUE), a create naming a drop that does not exist, a size
+// edit referencing a size that is not on the product, or an attempt to remove a
+// size an order still references. Anything else (a broken database) stays a
+// thrown 500.
+export type ProductErrorCode =
+  "slug_taken" | "drop_not_found" | "unknown_size" | "size_in_use";
 
 export class ProductError extends Error {
   constructor(readonly code: ProductErrorCode) {
@@ -148,3 +152,97 @@ export function updateProduct(
   }
   return getProductForAdmin(id);
 }
+
+// The size ids of a product that at least one order line references. Deleting one
+// would orphan an order_item (the FK is the (size_id, product_id) pair), so these
+// cannot be removed regardless of the order's status — a cancelled order still
+// records which size was ordered. DISTINCT because a size can appear on many.
+const sizesWithOrdersStmt = db.prepare(
+  `SELECT DISTINCT size_id FROM order_items
+    WHERE product_id = ? AND size_id IS NOT NULL`,
+);
+
+const deleteSizeStmt = db.prepare(
+  `DELETE FROM product_sizes WHERE id = ? AND product_id = ?`,
+);
+const renameSizeStmt = db.prepare(
+  `UPDATE product_sizes SET label = @label WHERE id = @id AND product_id = @product_id`,
+);
+const updateSizeStmt = db.prepare(
+  `UPDATE product_sizes SET label = @label, sort = @sort
+    WHERE id = @id AND product_id = @product_id`,
+);
+const insertSizeStmt = db.prepare(
+  `INSERT INTO product_sizes (product_id, label, sort)
+   VALUES (@product_id, @label, @sort)`,
+);
+
+// A transient label no real size can collide with. zod trims every submitted
+// label, so a stored label never carries a leading space, while every temp does;
+// the id keeps temps unique among themselves. (A NUL sentinel would read neater
+// but SQLite truncates bound text at the first NUL, collapsing every temp to "".)
+const tempLabel = (id: number): string => ` ${String(id)}`;
+
+// Reconcile a product's sizes to the desired list, in one transaction so a
+// refusal leaves the rows untouched. Returns undefined when no such product
+// exists (the route 404s). A desired size carrying an id must be a current size
+// of this product (else unknown_size); a current size dropped from the list is
+// deleted, unless an order references it (size_in_use). Kept sizes are renamed to
+// a transient NUL label first, so a label swap or reorder can't trip the
+// UNIQUE(product_id, label) index mid-update; then final labels are set and new
+// sizes inserted. All SQL is here; the route only maps the errors.
+export const setProductSizes = db.transaction(
+  (productId: number, desired: SizeInput[]): ProductWithSizes | undefined => {
+    if (productByIdStmt.get(productId) === undefined) return undefined;
+
+    const current = sizesForProductStmt.all(productId) as ProductSize[];
+    const currentIds = new Set(current.map((s) => s.id));
+    for (const s of desired) {
+      if (s.id !== undefined && !currentIds.has(s.id)) {
+        throw new ProductError("unknown_size");
+      }
+    }
+
+    const keptIds = new Set(
+      desired.flatMap((s) => (s.id === undefined ? [] : [s.id])),
+    );
+    const withOrders = new Set(
+      (sizesWithOrdersStmt.all(productId) as { size_id: number }[]).map(
+        (r) => r.size_id,
+      ),
+    );
+    const removed = current.filter((s) => !keptIds.has(s.id));
+    for (const s of removed) {
+      if (withOrders.has(s.id)) throw new ProductError("size_in_use");
+    }
+
+    for (const s of removed) deleteSizeStmt.run(s.id, productId);
+    for (const s of desired) {
+      if (s.id !== undefined) {
+        renameSizeStmt.run({
+          id: s.id,
+          product_id: productId,
+          label: tempLabel(s.id),
+        });
+      }
+    }
+    for (const s of desired) {
+      if (s.id !== undefined) {
+        updateSizeStmt.run({
+          id: s.id,
+          product_id: productId,
+          label: s.label,
+          sort: s.sort,
+        });
+      } else {
+        insertSizeStmt.run({
+          product_id: productId,
+          label: s.label,
+          sort: s.sort,
+        });
+      }
+    }
+
+    return getProductForAdmin(productId);
+  },
+);

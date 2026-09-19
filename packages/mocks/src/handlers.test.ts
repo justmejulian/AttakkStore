@@ -45,6 +45,14 @@ function patch(path: string, body: unknown): Promise<Response> {
   });
 }
 
+function put(path: string, body: unknown): Promise<Response> {
+  return fetch(`${base}${path}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 test("GET /drops returns the live collections", async () => {
   const res = await fetch(`${base}/drops`);
   assert.equal(res.status, 200);
@@ -262,6 +270,56 @@ test("PATCH /admin/products/:id mirrors the API's edit branches", async () => {
         status: "draft",
       })
     ).status,
+    404,
+  );
+});
+
+test("PUT /admin/products/:id/sizes mirrors the API's reconcile branches", async () => {
+  // Product 10's fixture sizes are 100 (S), 101 (M), 102 (L); orders reference
+  // 100 and 101, so only 102 is free to drop.
+  const ok = await put("/admin/products/10/sizes", {
+    sizes: [
+      { id: 100, label: "S", sort: 0 },
+      { id: 101, label: "M", sort: 1 },
+      { label: "XL", sort: 2 },
+    ],
+  });
+  assert.equal(ok.status, 200);
+  const sizes = ((await ok.json()) as { sizes: { label: string }[] }).sizes;
+  assert.deepEqual(
+    sizes.map((s) => s.label),
+    ["S", "M", "XL"],
+  );
+
+  // Dropping an in-use size (101) is a 409; naming an unknown id a 422.
+  assert.equal(
+    (
+      await put("/admin/products/10/sizes", {
+        sizes: [{ id: 100, label: "S" }],
+      })
+    ).status,
+    409,
+  );
+  assert.equal(
+    (
+      await put("/admin/products/10/sizes", {
+        sizes: [{ id: 99999, label: "Z" }],
+      })
+    ).status,
+    422,
+  );
+
+  // Duplicate labels are a 400; a missing product a 404.
+  assert.equal(
+    (
+      await put("/admin/products/10/sizes", {
+        sizes: [{ label: "S" }, { label: "S" }],
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (await put("/admin/products/999/sizes", { sizes: [] })).status,
     404,
   );
 });

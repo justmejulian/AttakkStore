@@ -6,6 +6,7 @@ import {
   orderStatusInput,
   productCreateInput,
   productInput,
+  productSizesInput,
 } from "@attakk/types";
 import { http, HttpResponse } from "msw";
 import {
@@ -91,6 +92,20 @@ const productSlugs = new Set(
 // distinct from any seeded product's.
 const MOCK_NEW_PRODUCT_ID = 900;
 
+// The base id newly-inserted sizes come back with, for the same stateless reason.
+const MOCK_NEW_SIZE_ID = 950;
+
+// The (product, size) pairs an order line references, so the size reconcile can
+// refuse to drop a size still in use — mirroring the API, which counts a size in
+// use regardless of the order's status (a cancelled order still records it).
+const sizesInUse = new Set(
+  allOrders.flatMap((o) =>
+    o.items.flatMap((i) =>
+      i.size_id === null ? [] : [`${i.product_id}:${i.size_id}`],
+    ),
+  ),
+);
+
 function isOrderStatus(value: string): boolean {
   return (ORDER_STATUSES as readonly string[]).includes(value);
 }
@@ -169,6 +184,45 @@ export const handlers = [
       return HttpResponse.json({ error: "slug_taken" }, { status: 409 });
     }
     return HttpResponse.json({ ...product, ...parsed.data });
+  }),
+
+  // Replace a product's sizes. Missing product 404, bad body 400; a desired size
+  // whose id is not on the product is a 422 unknown_size, and dropping a size an
+  // order references is a 409 size_in_use — the API's reconcile guards. On success
+  // the product comes back with the reconciled sizes (new ones get synthetic ids).
+  http.put("*/admin/products/:id/sizes", async ({ params, request }) => {
+    const product = productsById.get(Number(params.id));
+    if (!product) {
+      return HttpResponse.json({ error: "not_found" }, { status: 404 });
+    }
+    const parsed = productSizesInput.safeParse(
+      await request.json().catch(() => null),
+    );
+    if (!parsed.success) {
+      return HttpResponse.json({ error: "invalid" }, { status: 400 });
+    }
+    const currentIds = new Set(product.sizes.map((s) => s.id));
+    if (
+      parsed.data.sizes.some((s) => s.id !== undefined && !currentIds.has(s.id))
+    ) {
+      return HttpResponse.json({ error: "unknown_size" }, { status: 422 });
+    }
+    const keptIds = new Set(
+      parsed.data.sizes.flatMap((s) => (s.id === undefined ? [] : [s.id])),
+    );
+    const removedInUse = product.sizes.some(
+      (s) => !keptIds.has(s.id) && sizesInUse.has(`${product.id}:${s.id}`),
+    );
+    if (removedInUse) {
+      return HttpResponse.json({ error: "size_in_use" }, { status: 409 });
+    }
+    let nextId = MOCK_NEW_SIZE_ID;
+    const sizes = parsed.data.sizes.map((s) => ({
+      id: s.id ?? nextId++,
+      label: s.label,
+      sort: s.sort,
+    }));
+    return HttpResponse.json({ ...product, sizes });
   }),
 
   http.get("*/products/:slug", ({ params }) => {

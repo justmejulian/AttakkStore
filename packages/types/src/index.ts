@@ -179,6 +179,45 @@ export const productCreateInput = productInput.extend({
 });
 export type ProductCreateInput = z.infer<typeof productCreateInput>;
 
+// Size labels are free text ('S', 'S–M', 'One Size'), bounded and non-empty, and
+// unique within a product so a duplicate 'M' can't make two indistinguishable
+// pills. A product may have none (the size-less cap). Capped in count so a
+// runaway submission can't insert thousands of rows.
+export const MAX_SIZE_LABEL_LEN = 50;
+export const MAX_PRODUCT_SIZES = 50;
+
+// One size in the desired list a product-sizes edit submits. An existing size
+// carries its id (so a size an order already references keeps that id and its
+// order history); a new size omits it and the API assigns one.
+export const sizeInput = z.object({
+  id: z.number().int().positive().optional(),
+  label: z.string().trim().min(1).max(MAX_SIZE_LABEL_LEN),
+  sort: z.number().int().min(0).default(0),
+});
+export type SizeInput = z.infer<typeof sizeInput>;
+
+// The whole desired size set for a product — a full replace, matching how the
+// edit form submits: the API reconciles current rows to this (insert new, update
+// kept, delete removed), refusing to delete a size an order references. Labels
+// must be unique and provided ids must not repeat, so the reconcile has one
+// unambiguous target state.
+export const productSizesInput = z.object({
+  sizes: z
+    .array(sizeInput)
+    .max(MAX_PRODUCT_SIZES)
+    .refine((list) => new Set(list.map((s) => s.label)).size === list.length, {
+      error: "size labels must be unique within a product",
+    })
+    .refine(
+      (list) => {
+        const ids = list.flatMap((s) => (s.id === undefined ? [] : [s.id]));
+        return new Set(ids).size === ids.length;
+      },
+      { error: "a size id may not repeat" },
+    ),
+});
+export type ProductSizesInput = z.infer<typeof productSizesInput>;
+
 /* ------------------------------------------------------------------ orders */
 
 // The three states an order moves through. Declared as one tuple so the type,
