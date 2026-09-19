@@ -795,6 +795,10 @@
   min-height: 100svh;
 }
 
+.min-height-screen-nav {
+  min-height: calc(100svh - var(--nav-height));
+}
+
 /* Aspect ratio & object fit */
 .ratio-auto {
   aspect-ratio: auto;
