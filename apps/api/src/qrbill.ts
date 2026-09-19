@@ -2,18 +2,13 @@ import type { OrderWithItems } from "@attakk/types";
 import PDFDocument from "pdfkit";
 import { SwissQRBill } from "swissqrbill/pdf";
 import type { Creditor, Data } from "swissqrbill/types";
+import { chf } from "./money.js";
 
 // The Swiss QR bill the customer is emailed and pays from their banking app. A
 // standard IBAN, not a QR-IBAN, so the payment part carries the order's RF
 // creditor reference rather than a QR reference (see reference.ts). No SQL here:
 // this renders an order the repository already priced, from the creditor the
 // settings reader already resolved.
-
-// Rappen to a plain "95.00" for display. Amounts are integer rappen everywhere
-// else; only the bill's amount field and this recap turn them into francs.
-function chf(rappen: number): string {
-  return (rappen / 100).toFixed(2);
-}
 
 // The payload swissqrbill encodes. Pulled out of the render so the parts that
 // matter — the franc amount off the rappen total, the RF reference, the

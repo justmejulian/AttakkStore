@@ -19,6 +19,16 @@ services:
     environment:
       PORT: "3000"
       DATA_DIR: /data
+      # SMTP is config, not repo — passed through from the host shell so staging
+      # can send real mail when the secrets are exported, and skips sending
+      # cleanly when they are not (empty values leave the mailer unconfigured).
+      # Production sets these with `dokku config:set`.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      NOTIFY_EMAIL: ${NOTIFY_EMAIL:-}
     volumes:
       # The API is the only writer of the data volume.
       - attakk-data:/data
