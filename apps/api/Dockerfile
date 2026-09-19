@@ -21,6 +21,12 @@ RUN pnpm --filter @attakk/api deploy --prod /app
 
 FROM base AS runtime
 ENV NODE_ENV=production
+# The SQLite file and uploads must live on the mounted volume, not the
+# ephemeral container filesystem. Both compose and Dokku mount it at /data, so
+# default to that here — otherwise a deploy without DATA_DIR set writes to
+# /app/data and loses every order on the next rebuild. Dev runs outside the
+# image and keeps the ./data default.
+ENV DATA_DIR=/data
 WORKDIR /app
 COPY --from=build /app /app
 EXPOSE 3000
