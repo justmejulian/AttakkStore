@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "comment": "Emit build only. Tests stay type-checked by `check` (plain tsconfig) but are kept out of dist so they never ship in the production image.",
+  "exclude": ["src/**/*.test.ts", "src/test-support.ts"]
+}
