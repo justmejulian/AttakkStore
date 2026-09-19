@@ -106,6 +106,13 @@ const sizesInUse = new Set(
   ),
 );
 
+// The products at least one order references, so the delete handler can refuse
+// them (409 has_orders) the way the API does — an order line pins the product,
+// which must be hidden rather than deleted.
+const productsWithOrders = new Set(
+  allOrders.flatMap((o) => o.items.map((i) => i.product_id)),
+);
+
 function isOrderStatus(value: string): boolean {
   return (ORDER_STATUSES as readonly string[]).includes(value);
 }
@@ -223,6 +230,19 @@ export const handlers = [
       sort: s.sort,
     }));
     return HttpResponse.json({ ...product, sizes });
+  }),
+
+  // Delete a product. Missing is a 404; a product an order references is a 409
+  // has_orders (hide it instead), the same refusal the API gives. Otherwise 204.
+  http.delete("*/admin/products/:id", ({ params }) => {
+    const product = productsById.get(Number(params.id));
+    if (!product) {
+      return HttpResponse.json({ error: "not_found" }, { status: 404 });
+    }
+    if (productsWithOrders.has(product.id)) {
+      return HttpResponse.json({ error: "has_orders" }, { status: 409 });
+    }
+    return new HttpResponse(null, { status: 204 });
   }),
 
   http.get("*/products/:slug", ({ params }) => {

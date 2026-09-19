@@ -53,6 +53,10 @@ function put(path: string, body: unknown): Promise<Response> {
   });
 }
 
+function del(path: string): Promise<Response> {
+  return fetch(`${base}${path}`, { method: "DELETE" });
+}
+
 test("GET /drops returns the live collections", async () => {
   const res = await fetch(`${base}/drops`);
   assert.equal(res.status, 200);
@@ -322,6 +326,13 @@ test("PUT /admin/products/:id/sizes mirrors the API's reconcile branches", async
     (await put("/admin/products/999/sizes", { sizes: [] })).status,
     404,
   );
+});
+
+test("DELETE /admin/products/:id refuses an ordered product and 404s a missing one", async () => {
+  // Product 12 (origins-tee) has no orders → 204; product 10 has orders → 409.
+  assert.equal((await del("/admin/products/12")).status, 204);
+  assert.equal((await del("/admin/products/10")).status, 409);
+  assert.equal((await del("/admin/products/999")).status, 404);
 });
 
 test("image write routes return the stored row and an empty 204", async () => {

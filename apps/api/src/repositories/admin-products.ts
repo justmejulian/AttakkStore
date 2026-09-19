@@ -2,6 +2,7 @@ import type {
   AdminProductRow,
   Product,
   ProductCreateInput,
+  ProductImage,
   ProductInput,
   ProductSize,
   ProductWithSizes,
@@ -67,14 +68,19 @@ export function getProductForAdmin(id: number): ProductWithSizes | undefined {
 
 // -------------------------------------------------------------- admin writes
 
-// Why a create, edit or size change was refused, for the reasons the route turns
-// into a 4xx the admin can act on rather than a 500: a slug already in use
-// (products.slug is UNIQUE), a create naming a drop that does not exist, a size
-// edit referencing a size that is not on the product, or an attempt to remove a
-// size an order still references. Anything else (a broken database) stays a
+// Why a create, edit, size change or delete was refused, for the reasons the
+// route turns into a 4xx the admin can act on rather than a 500: a slug already
+// in use (products.slug is UNIQUE), a create naming a drop that does not exist, a
+// size edit referencing a size that is not on the product, an attempt to remove a
+// size an order still references, or a delete of a product an order references
+// (which must be hidden instead). Anything else (a broken database) stays a
 // thrown 500.
 export type ProductErrorCode =
-  "slug_taken" | "drop_not_found" | "unknown_size" | "size_in_use";
+  | "slug_taken"
+  | "drop_not_found"
+  | "unknown_size"
+  | "size_in_use"
+  | "has_orders";
 
 export class ProductError extends Error {
   constructor(readonly code: ProductErrorCode) {
@@ -244,5 +250,30 @@ export const setProductSizes = db.transaction(
     }
 
     return getProductForAdmin(productId);
+  },
+);
+
+const productHasOrdersStmt = db.prepare(
+  `SELECT 1 FROM order_items WHERE product_id = ? LIMIT 1`,
+);
+const deleteProductByIdStmt = db.prepare(`DELETE FROM products WHERE id = ?`);
+
+// Delete a product, returning the image rows it had so the route can unlink their
+// files (the product_sizes and product_images rows cascade, but the files on disk
+// do not). Returns undefined when no such product exists (the route 404s). A
+// product any order references is kept — deleting it would orphan the order_items
+// that record what someone paid for — so it is a has_orders refusal the admin
+// resolves by hiding the product instead. Wrapped in a transaction so the
+// orders check and the delete are one step. Images are captured before the delete
+// since the rows are gone after it.
+export const deleteProduct = db.transaction(
+  (id: number): ProductImage[] | undefined => {
+    if (productByIdStmt.get(id) === undefined) return undefined;
+    if (productHasOrdersStmt.get(id) !== undefined) {
+      throw new ProductError("has_orders");
+    }
+    const images = listProductImages(id);
+    deleteProductByIdStmt.run(id);
+    return images;
   },
 );

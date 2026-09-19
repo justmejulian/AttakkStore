@@ -1,11 +1,20 @@
 import assert from "node:assert/strict";
-import type { AdminProductRow, ProductWithSizes } from "@attakk/types";
+import { existsSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { after, test } from "node:test";
+import {
+  type AdminProductRow,
+  derivativeWidths,
+  type ProductWithSizes,
+} from "@attakk/types";
 import { openTempApi, seedCatalog } from "../test-support.js";
 
 const { db, cleanup } = await openTempApi();
 seedCatalog(db);
 seedOrders();
+// db.js is already imported by openTempApi (which set DATA_DIR first), so this
+// resolves to the same module and its upload directories under the temp DATA_DIR.
+const { ORIGINALS_DIR, UPLOADS_DIR } = await import("../db.js");
 const { adminProducts } = await import("./admin-products.js");
 
 after(() => cleanup());
@@ -324,6 +333,60 @@ test("PUT sizes is 400 for duplicate labels and 404 for a missing product", asyn
     404,
   );
 });
+
+test("DELETE refuses a product an order references (409) and 404s a missing one", async () => {
+  // Product 10 is referenced by the seeded orders, so it can't be deleted.
+  const res = await del("/admin/products/10");
+  assert.equal(res.status, 409);
+  assert.deepEqual(await res.json(), { error: "has_orders" });
+  // Still there — the refusal changed nothing.
+  assert.equal((await adminProducts.request("/admin/products/10")).status, 200);
+  assert.equal((await del("/admin/products/999")).status, 404);
+  assert.equal((await del("/admin/products/abc")).status, 404);
+});
+
+test("DELETE removes a product, cascades its sizes and images, and unlinks files", async () => {
+  // A fresh order-free product with a size and an image row whose files are on
+  // disk, so the delete exercises both cascades and the file cleanup.
+  const created = await post("/admin/products", createBody("to-delete"));
+  const { id } = (await created.json()) as { id: number };
+  await put(`/admin/products/${id}/sizes`, { sizes: [{ label: "S" }] });
+
+  const hash = "deadbeefdeadbeef";
+  const width = 800;
+  db.prepare(
+    `INSERT INTO product_images
+       (product_id, hash, ext, alt, placeholder, width, height, sort)
+     VALUES (?, ?, 'webp', '', '', ?, 1000, 0)`,
+  ).run(id, hash, width);
+  const files = [
+    join(ORIGINALS_DIR, `${hash}.webp`),
+    ...derivativeWidths(width).map((w) =>
+      join(UPLOADS_DIR, `${hash}-${w}.webp`),
+    ),
+  ];
+  for (const f of files) writeFileSync(f, "x");
+
+  const res = await del(`/admin/products/${id}`);
+  assert.equal(res.status, 204);
+  assert.equal(
+    (await adminProducts.request(`/admin/products/${id}`)).status,
+    404,
+  );
+  const count = (table: string): number =>
+    (
+      db
+        .prepare(`SELECT count(*) AS n FROM ${table} WHERE product_id = ?`)
+        .get(id) as { n: number }
+    ).n;
+  assert.equal(count("product_sizes"), 0);
+  assert.equal(count("product_images"), 0);
+  assert.ok(files.every((f) => !existsSync(f)));
+});
+
+function del(path: string): Promise<Response> {
+  return Promise.resolve(adminProducts.request(path, { method: "DELETE" }));
+}
 
 function put(path: string, body: unknown): Promise<Response> {
   return Promise.resolve(

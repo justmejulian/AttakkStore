@@ -4,14 +4,18 @@ import {
   productSizesInput,
 } from "@attakk/types";
 import { type Context, Hono } from "hono";
+import { ORIGINALS_DIR, UPLOADS_DIR } from "../db.js";
+import { removeImageFiles } from "../images.js";
 import {
   createProduct,
+  deleteProduct,
   getProductForAdmin,
   listProductsForAdmin,
   ProductError,
   setProductSizes,
   updateProduct,
 } from "../repositories/admin-products.js";
+import { countProductImagesByHash } from "../repositories/images.js";
 import { parseId } from "./params.js";
 
 // The admin's product screens, reached over the internal network: the list of
@@ -31,6 +35,7 @@ function productError(c: Context, err: unknown): Response {
     switch (err.code) {
       case "slug_taken":
       case "size_in_use":
+      case "has_orders":
         return c.json({ error: err.code }, 409);
       case "drop_not_found":
       case "unknown_size":
@@ -39,6 +44,10 @@ function productError(c: Context, err: unknown): Response {
   }
   throw err;
 }
+
+// The image directories, so a product delete can unlink the files its images left
+// on disk (the rows cascade, the files do not). Same pair the image routes use.
+const IMAGE_DIRS = { uploadsDir: UPLOADS_DIR, originalsDir: ORIGINALS_DIR };
 
 adminProducts.get("/admin/products", (c) => c.json(listProductsForAdmin()));
 
@@ -106,4 +115,28 @@ adminProducts.put("/admin/products/:id/sizes", async (c) => {
   } catch (err) {
     return productError(c, err);
   }
+});
+
+// Delete a product. A missing product is a 404; a product any order references is
+// a 409 has_orders (the admin hides it instead, since deleting would orphan the
+// order lines that record what was bought). On success its sizes and image rows
+// cascade, and the image files whose last referencing row is now gone are
+// unlinked, mirroring the image-delete route's content-hash bookkeeping.
+adminProducts.delete("/admin/products/:id", async (c) => {
+  const id = parseId(c.req.param("id"));
+  if (id === null) return c.json({ error: "not_found" }, 404);
+  let images;
+  try {
+    images = deleteProduct(id);
+  } catch (err) {
+    return productError(c, err);
+  }
+  if (images === undefined) return c.json({ error: "not_found" }, 404);
+
+  for (const image of images) {
+    if (countProductImagesByHash(image.hash) === 0) {
+      await removeImageFiles(IMAGE_DIRS, image);
+    }
+  }
+  return c.body(null, 204);
 });
