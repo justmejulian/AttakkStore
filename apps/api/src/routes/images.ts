@@ -13,6 +13,7 @@ import {
   deleteProductImage,
   productExists,
 } from "../repositories/images.js";
+import { parseId } from "./params.js";
 
 // The admin's image writes, reached over the internal network: attach a photo
 // to a product, or remove one. Processing and SQL live in ../images and the
@@ -27,13 +28,6 @@ const IMAGE_DIRS = { uploadsDir: UPLOADS_DIR, originalsDir: ORIGINALS_DIR };
 // everything else (undecodable bytes, a format off the allowlist) is 400.
 function statusFor(code: ImageError["code"]): 413 | 400 {
   return code === "too_large" ? 413 : 400;
-}
-
-// A positive integer route id, or null. Non-numeric or non-positive means no
-// such row, which both handlers answer with a 404.
-function parseId(raw: string): number | null {
-  const id = Number(raw);
-  return Number.isInteger(id) && id > 0 ? id : null;
 }
 
 images.post("/products/:id/images", async (c) => {

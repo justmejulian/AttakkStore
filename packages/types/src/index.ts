@@ -119,7 +119,11 @@ export interface DropWithProducts extends Drop {
 
 /* ------------------------------------------------------------------ orders */
 
-export type OrderStatus = "pending" | "paid" | "cancelled";
+// The three states an order moves through. Declared as one tuple so the type,
+// the DB check constraint's mirror, and the admin's status-update zod all read
+// from a single list rather than three that could drift.
+export const ORDER_STATUSES = ["pending", "paid", "cancelled"] as const;
+export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
 // Caps on how much one order can carry. These are server-side integrity, not
 // abuse defence — the honeypot and per-IP rate limiting the plan calls for
@@ -195,6 +199,31 @@ export interface Order {
 export interface OrderWithItems extends Order {
   items: OrderItem[];
 }
+
+// The order as the admin list shows it: every field but the receipt token. The
+// token guards the public receipt URL, so it is the shop's business (the order
+// creation response and the detail view carry it), never the list's — a list
+// that flows into a CSV export must not scatter receipt secrets across a file.
+export type OrderListRow = Omit<Order, "token">;
+
+// The most an admin note can hold. Generous — it is an internal free-text field
+// (a payment chased by hand, a pickup arranged) rather than structured data —
+// but capped so a runaway paste can't bloat the row.
+export const MAX_NOTE_LEN = 2000;
+
+// The admin's two writes to an existing order, validated with the same zod the
+// API enforces so the form and the endpoint agree on what is allowed. Setting
+// the status to paid stamps paid_at and any other status clears it; the note is
+// free text the customer never sees.
+export const orderStatusInput = z.object({
+  status: z.enum(ORDER_STATUSES),
+});
+export type OrderStatusInput = z.infer<typeof orderStatusInput>;
+
+export const orderNoteInput = z.object({
+  note: z.string().max(MAX_NOTE_LEN),
+});
+export type OrderNoteInput = z.infer<typeof orderNoteInput>;
 
 /* ------------------------------------------------------------------- admin */
 

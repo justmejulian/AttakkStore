@@ -4,6 +4,8 @@ import type {
   OrderInput,
   OrderItem,
   OrderLineInput,
+  OrderListRow,
+  OrderStatus,
   OrderWithItems,
 } from "@attakk/types";
 import { db } from "../db.js";
@@ -151,4 +153,66 @@ export function getOrder(id: number): OrderWithItems | undefined {
   if (!order) return undefined;
   const items = itemsForOrderStmt.all(id) as OrderItem[];
   return { ...order, items };
+}
+
+// -------------------------------------------------------------- admin reads
+
+// The admin's orders list. Newest first — id descending is creation order, since
+// ids are assigned in sequence — optionally narrowed to one status. No items are
+// joined: the list shows reference, email, total and status, and the detail view
+// loads the lines when a row is opened. The receipt token is deliberately not
+// selected: it guards the public receipt URL, so it stays out of the list (and
+// its CSV export) — the detail view is where the full order, token included, is
+// read.
+const listOrdersStmt = db.prepare(
+  `SELECT id, reference, email, phone, total_rappen, status,
+          created_at, paid_at, note
+     FROM orders ORDER BY id DESC`,
+);
+const listOrdersByStatusStmt = db.prepare(
+  `SELECT id, reference, email, phone, total_rappen, status,
+          created_at, paid_at, note
+     FROM orders WHERE status = ? ORDER BY id DESC`,
+);
+
+export function listOrders(status?: OrderStatus): OrderListRow[] {
+  const rows = status
+    ? listOrdersByStatusStmt.all(status)
+    : listOrdersStmt.all();
+  return rows as OrderListRow[];
+}
+
+// -------------------------------------------------------------- admin writes
+
+const setStatusStmt = db.prepare(
+  `UPDATE orders SET status = @status, paid_at = @paid_at WHERE id = @id`,
+);
+const setNoteStmt = db.prepare(`UPDATE orders SET note = ? WHERE id = ?`);
+
+// Move an order between pending, paid and cancelled. paid_at is the moment it was
+// marked paid and is meaningless otherwise, so it is cleared for any non-paid
+// state — flipping a mistaken mark back to pending erases the timestamp too. When
+// marking paid it is stamped only if not already set, so re-confirming a paid
+// order keeps the original payment date rather than resetting it to now; the
+// stamp matches created_at's format (millisecond ISO in UTC). Returns undefined
+// when no such order exists.
+export function setOrderStatus(
+  id: number,
+  status: OrderStatus,
+): OrderWithItems | undefined {
+  const existing = getOrder(id);
+  if (!existing) return undefined;
+  const paid_at =
+    status === "paid" ? (existing.paid_at ?? new Date().toISOString()) : null;
+  setStatusStmt.run({ id, status, paid_at });
+  return getOrder(id);
+}
+
+export function setOrderNote(
+  id: number,
+  note: string,
+): OrderWithItems | undefined {
+  const info = setNoteStmt.run(note, id);
+  if (info.changes === 0) return undefined;
+  return getOrder(id);
 }

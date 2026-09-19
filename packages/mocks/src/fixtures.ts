@@ -2,6 +2,7 @@ import type {
   AdminUser,
   DropWithProducts,
   OrderInput,
+  OrderListRow,
   OrderWithItems,
   ProductImage,
 } from "@attakk/types";
@@ -214,6 +215,75 @@ export const unavailableProductRejection: OrderRejection = {
   status: 422,
   error: "product_unavailable",
 };
+
+// Two more stored orders beyond createdOrder, so the admin's list, its status
+// filter and its detail view each have a pending, a paid and a cancelled order to
+// show. Unlike createdOrder these are never posted, so their ids, tokens and
+// timestamps are fixed — they are rows the admin reads, not orders it creates.
+export const paidOrder: OrderWithItems = {
+  id: 2,
+  reference: "RF74000002",
+  token: "11111111111111111111111111111111",
+  email: "paid@example.com",
+  phone: "",
+  total_rappen: 3500,
+  status: "paid",
+  created_at: "2026-01-02T00:00:00.000Z",
+  paid_at: "2026-01-03T00:00:00.000Z",
+  note: "Paid in person at the shop.",
+  items: [
+    {
+      id: 2,
+      product_id: 11,
+      size_id: null,
+      qty: 1,
+      unit_price_rappen: 3500,
+      title: "Redline Cap",
+    },
+  ],
+};
+
+export const cancelledOrder: OrderWithItems = {
+  id: 3,
+  reference: "RF74000003",
+  token: "22222222222222222222222222222222",
+  email: "cancelled@example.com",
+  phone: "",
+  total_rappen: 9500,
+  status: "cancelled",
+  created_at: "2026-01-04T00:00:00.000Z",
+  paid_at: null,
+  note: "",
+  items: [
+    {
+      id: 3,
+      product_id: 10,
+      size_id: 100,
+      qty: 1,
+      unit_price_rappen: 9500,
+      title: "Redline Jersey",
+    },
+  ],
+};
+
+// Every stored order the admin can open, newest first — the order id descending
+// gives, which is what GET /admin/orders returns.
+export const allOrders: OrderWithItems[] = [
+  cancelledOrder,
+  paidOrder,
+  createdOrder,
+];
+
+// GET /admin/orders — the list without line items or the receipt token. Items
+// load in the detail view (GET /admin/orders/:id) and the token stays out of the
+// list entirely, mirroring the API's narrower list projection.
+function toListRow(order: OrderWithItems): OrderListRow {
+  const { items, token, ...row } = order;
+  void items; // the list carries the bare row; the detail view carries the items
+  void token; // the receipt token is the shop's, never the list's
+  return row;
+}
+export const orderListRows: OrderListRow[] = allOrders.map(toListRow);
 
 /* ------------------------------------------------------------------ images */
 

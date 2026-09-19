@@ -1,10 +1,18 @@
-import { loginInput, orderInput } from "@attakk/types";
+import {
+  loginInput,
+  ORDER_STATUSES,
+  orderInput,
+  orderNoteInput,
+  orderStatusInput,
+} from "@attakk/types";
 import { http, HttpResponse } from "msw";
 import {
   adminCredentials,
   adminUser,
+  allOrders,
   createdOrder,
   liveDrops,
+  orderListRows,
   originsDrop,
   redlineDrop,
   uploadedImage,
@@ -58,6 +66,19 @@ const productsBySlug = new Map(
     .flatMap((d) => d.products)
     .map((p) => [p.slug, p] as const),
 );
+
+// Stored orders by id, for the admin's detail, status and note handlers. The
+// list is the same rows without their items (orderListRows).
+const ordersById = new Map(allOrders.map((o) => [o.id, o] as const));
+
+function isOrderStatus(value: string): boolean {
+  return (ORDER_STATUSES as readonly string[]).includes(value);
+}
+
+// The paid_at the status handler stamps when a not-yet-paid order is marked paid.
+// The API stamps the real time; the mock is stateless, so it returns this fixed,
+// obviously-synthetic value instead — distinct from any fixture's own paid_at.
+const MOCK_PAID_STAMP = "2026-01-05T00:00:00.000Z";
 
 export const handlers = [
   http.get("*/drops", () => HttpResponse.json(liveDrops)),
@@ -118,5 +139,67 @@ export const handlers = [
       return HttpResponse.json(adminUser);
     }
     return HttpResponse.json({ error: "invalid_credentials" }, { status: 401 });
+  }),
+
+  // The admin's order screens. The list is the bare rows, newest first, narrowed
+  // by an optional status; an unknown status is a 400, the same as the API. The
+  // detail, status and note handlers key off the fixture orders by id.
+  http.get("*/admin/orders", ({ request }) => {
+    const status = new URL(request.url).searchParams.get("status");
+    if (status !== null && !isOrderStatus(status)) {
+      return HttpResponse.json({ error: "invalid_status" }, { status: 400 });
+    }
+    const rows = status
+      ? orderListRows.filter((o) => o.status === status)
+      : orderListRows;
+    return HttpResponse.json(rows);
+  }),
+
+  http.get("*/admin/orders/:id", ({ params }) => {
+    const order = ordersById.get(Number(params.id));
+    return order
+      ? HttpResponse.json(order)
+      : HttpResponse.json({ error: "not_found" }, { status: 404 });
+  }),
+
+  // Mark paid/cancelled/pending. Setting paid stamps paid_at, any other status
+  // clears it — the API stamps the real time, the mock a fixed one, but the
+  // shape and the paid/not-paid distinction match.
+  http.patch("*/admin/orders/:id/status", async ({ params, request }) => {
+    const order = ordersById.get(Number(params.id));
+    if (!order)
+      return HttpResponse.json({ error: "not_found" }, { status: 404 });
+    const parsed = orderStatusInput.safeParse(
+      await request.json().catch(() => null),
+    );
+    if (!parsed.success) {
+      return HttpResponse.json({ error: "invalid" }, { status: 400 });
+    }
+    const { status } = parsed.data;
+    const paid_at =
+      status === "paid" ? (order.paid_at ?? MOCK_PAID_STAMP) : null;
+    return HttpResponse.json({ ...order, status, paid_at });
+  }),
+
+  http.patch("*/admin/orders/:id/note", async ({ params, request }) => {
+    const order = ordersById.get(Number(params.id));
+    if (!order)
+      return HttpResponse.json({ error: "not_found" }, { status: 404 });
+    const parsed = orderNoteInput.safeParse(
+      await request.json().catch(() => null),
+    );
+    if (!parsed.success) {
+      return HttpResponse.json({ error: "invalid" }, { status: 400 });
+    }
+    return HttpResponse.json({ ...order, note: parsed.data.note });
+  }),
+
+  // Resend the QR bill. The send is the API's side effect; the mock just answers
+  // the same 202-queued the moment the order is found.
+  http.post("*/admin/orders/:id/resend", ({ params }) => {
+    const order = ordersById.get(Number(params.id));
+    if (!order)
+      return HttpResponse.json({ error: "not_found" }, { status: 404 });
+    return HttpResponse.json({ status: "queued" }, { status: 202 });
   }),
 ];

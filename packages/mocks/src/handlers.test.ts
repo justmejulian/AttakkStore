@@ -6,6 +6,8 @@ import {
   adminUser,
   createdOrder,
   liveDrops,
+  orderListRows,
+  paidOrder,
   uploadedImage,
 } from "./fixtures.js";
 import { handlers } from "./handlers.js";
@@ -28,6 +30,14 @@ after(() => server.close());
 function post(path: string, body: unknown): Promise<Response> {
   return fetch(`${base}${path}`, {
     method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+function patch(path: string, body: unknown): Promise<Response> {
+  return fetch(`${base}${path}`, {
+    method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -105,6 +115,78 @@ test("POST /admin/login accepts the fixture credentials and refuses the rest", a
 
   // A body the schema rejects is the same 400 the API gives.
   assert.equal((await post("/admin/login", { username: "x" })).status, 400);
+});
+
+test("GET /admin/orders lists the rows and filters by status", async () => {
+  const all = await fetch(`${base}/admin/orders`);
+  assert.equal(all.status, 200);
+  assert.deepEqual(await all.json(), orderListRows);
+
+  const paid = await fetch(`${base}/admin/orders?status=paid`);
+  assert.deepEqual(
+    await paid.json(),
+    orderListRows.filter((o) => o.status === "paid"),
+  );
+
+  const bad = await fetch(`${base}/admin/orders?status=shipped`);
+  assert.equal(bad.status, 400);
+  assert.deepEqual(await bad.json(), { error: "invalid_status" });
+});
+
+test("GET /admin/orders/:id returns the order with items or 404s", async () => {
+  const found = await fetch(`${base}/admin/orders/2`);
+  assert.equal(found.status, 200);
+  assert.deepEqual(await found.json(), paidOrder);
+  assert.equal((await fetch(`${base}/admin/orders/999`)).status, 404);
+});
+
+test("PATCH status returns the updated order and stamps or clears paid_at", async () => {
+  const paid = await patch("/admin/orders/1/status", { status: "paid" });
+  const paidBody = (await paid.json()) as {
+    status: string;
+    paid_at: string | null;
+  };
+  assert.equal(paidBody.status, "paid");
+  assert.notEqual(paidBody.paid_at, null);
+
+  const cancelled = await patch("/admin/orders/1/status", {
+    status: "cancelled",
+  });
+  assert.equal(
+    ((await cancelled.json()) as { paid_at: string | null }).paid_at,
+    null,
+  );
+
+  assert.equal(
+    (await patch("/admin/orders/1/status", { status: "x" })).status,
+    400,
+  );
+  assert.equal(
+    (await patch("/admin/orders/999/status", { status: "paid" })).status,
+    404,
+  );
+});
+
+test("PATCH note returns the order with the new note", async () => {
+  const res = await patch("/admin/orders/1/note", { note: "Chased payment." });
+  assert.equal(
+    ((await res.json()) as { note: string }).note,
+    "Chased payment.",
+  );
+  assert.equal(
+    (await patch("/admin/orders/999/note", { note: "x" })).status,
+    404,
+  );
+});
+
+test("POST resend is 202 for a known order and 404 otherwise", async () => {
+  const ok = await fetch(`${base}/admin/orders/1/resend`, { method: "POST" });
+  assert.equal(ok.status, 202);
+  assert.deepEqual(await ok.json(), { status: "queued" });
+  const miss = await fetch(`${base}/admin/orders/999/resend`, {
+    method: "POST",
+  });
+  assert.equal(miss.status, 404);
 });
 
 test("image write routes return the stored row and an empty 204", async () => {
