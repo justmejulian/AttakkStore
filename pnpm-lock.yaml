@@ -54,6 +54,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@attakk/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       '@hono/node-server':
         specifier: ^2.1.1
         version: 2.1.1(hono@4.13.8)
@@ -64,9 +67,6 @@ importers:
         specifier: ^4.13.8
         version: 4.13.8
     devDependencies:
-      '@attakk/types':
-        specifier: workspace:*
-        version: link:../../packages/types
       '@types/better-sqlite3':
         specifier: ^9.6.0
         version: 9.6.0
@@ -109,6 +109,10 @@ importers:
         version: 0.7.5(@devframes/agentic@1.0.0(crossws@0.4.12(srvx@1.0.5))(devframe@1.0.0))(crossws@0.4.12(srvx@1.0.5))(srvx@1.0.5)(vite@8.3.0)
 
   packages/types:
+    dependencies:
+      zod:
+        specifier: ^4.1.12
+        version: 4.6.5
     devDependencies:
       typescript:
         specifier: ^6.0.3

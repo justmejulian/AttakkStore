@@ -50,7 +50,9 @@ test("migrates a v1 database that already holds rows", () => {
     );
   `);
   db.pragma("user_version = 1");
-  const drop = db.prepare("INSERT INTO drops (name, year, no) VALUES (?, 2026, ?)");
+  const drop = db.prepare(
+    "INSERT INTO drops (name, year, no) VALUES (?, 2026, ?)",
+  );
   drop.run("A", 1);
   drop.run("B", 2);
   const product = db.prepare(
@@ -65,9 +67,9 @@ test("migrates a v1 database that already holds rows", () => {
   // Every backfilled slug is non-empty and unique, so the admin can find and
   // replace them and the unique index holds in the meantime.
   for (const table of ["drops", "products"]) {
-    const rows = db
-      .prepare(`SELECT slug FROM ${table}`)
-      .all() as { slug: string }[];
+    const rows = db.prepare(`SELECT slug FROM ${table}`).all() as {
+      slug: string;
+    }[];
     const slugs = rows.map((r) => r.slug);
     assert.ok(
       slugs.every((s) => s.length > 0),

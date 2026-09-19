@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "comment": "Emit dist for production: the shared zod schemas are runtime values, so `node` in an app's image loads this package's compiled JS. `check` still type-checks with the plain (noEmit) config.",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  }
+}

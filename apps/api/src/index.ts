@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { db } from "./db.js";
 import { catalog } from "./routes/catalog.js";
+import { orders } from "./routes/orders.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
 
@@ -24,6 +25,10 @@ app.get("/health", (c) => {
 // Public catalogue reads for the storefront: /drops, /drops/:slug,
 // /products/:slug.
 app.route("/", catalog);
+
+// The write path: POST /orders prices the cart server-side and creates the
+// order with its RF reference.
+app.route("/", orders);
 
 serve({ fetch: app.fetch, port: PORT }, ({ port }) => {
   console.log(`api listening on :${port}`);

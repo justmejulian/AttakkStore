@@ -1,5 +1,8 @@
 {
   "extends": "./tsconfig.json",
-  "comment": "Emit build only. Tests stay type-checked by `check` (plain tsconfig) but are kept out of dist so they never ship in the production image.",
+  "comment": "Emit build only. Tests stay type-checked by `check` (plain tsconfig) but are kept out of dist so they never ship in the production image. customConditions drops the base config's `source` condition so @attakk/types resolves to its built .d.ts, not its source — an emitting build cannot pull in a .ts that lives outside rootDir, which is why the Dockerfile builds @attakk/types first.",
+  "compilerOptions": {
+    "customConditions": ["production"]
+  },
   "exclude": ["src/**/*.test.ts", "src/test-support.ts"]
 }

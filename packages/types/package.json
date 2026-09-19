@@ -3,12 +3,24 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
-  "types": "./src/index.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "typescript": "^6.0.3"

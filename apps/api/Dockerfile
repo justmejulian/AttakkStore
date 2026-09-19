@@ -16,7 +16,10 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 COPY . .
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
-RUN pnpm --filter @attakk/api build
+# `@attakk/api...` builds this app and its workspace dependencies (@attakk/types)
+# in order: the API's build reads the built types .d.ts, and deploy copies the
+# built types dist and zod into the bundle so `node dist/index.js` can load them.
+RUN pnpm --filter "@attakk/api..." build
 RUN pnpm --filter @attakk/api deploy --prod /app
 
 FROM base AS runtime
