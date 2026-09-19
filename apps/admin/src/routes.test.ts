@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, afterEach, before, test } from "node:test";
-import { adminCredentials } from "@attakk/mocks";
+import { adminCredentials, orderListRows, paidOrder } from "@attakk/mocks";
 import { server } from "@attakk/mocks/node";
 import { http, HttpResponse } from "msw";
 import { app } from "./app.js";
@@ -108,4 +108,137 @@ test("logout expires the session cookie", async () => {
   assert.equal(res.status, 302);
   assert.equal(res.headers.get("location"), "/login");
   assert.match(res.headers.get("set-cookie")!, /admin_session=;/);
+});
+
+// ------------------------------------------------------------ order screens
+
+// A signed-in session cookie, ready to send with a protected request.
+async function authed(): Promise<string> {
+  const res = await login(adminCredentials.username, adminCredentials.password);
+  return sessionCookie(res);
+}
+
+function get(path: string, cookie: string): Promise<Response> {
+  return Promise.resolve(app.request(path, { headers: { cookie } }));
+}
+
+function form(
+  path: string,
+  cookie: string,
+  body: Record<string, string>,
+): Promise<Response> {
+  return Promise.resolve(
+    app.request(path, {
+      method: "POST",
+      headers: {
+        cookie,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams(body),
+    }),
+  );
+}
+
+test("the orders list is behind the auth gate", async () => {
+  const res = await app.request("/orders");
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get("location"), "/login");
+});
+
+test("GET /orders lists every order from the API", async () => {
+  const res = await get("/orders", await authed());
+  assert.equal(res.status, 200);
+  const body = await res.text();
+  for (const o of orderListRows) assert.match(body, new RegExp(o.reference));
+});
+
+test("GET /orders?status= narrows to that status", async () => {
+  const res = await get("/orders?status=paid", await authed());
+  assert.equal(res.status, 200);
+  const body = await res.text();
+  // The mock filters to the paid order; the pending one must be absent.
+  assert.match(body, new RegExp(paidOrder.reference));
+  assert.doesNotMatch(body, /RF74000001/);
+});
+
+test("GET /orders.csv returns a csv attachment of the same rows", async () => {
+  const res = await get("/orders.csv", await authed());
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get("content-type")!, /text\/csv/);
+  assert.match(
+    res.headers.get("content-disposition")!,
+    /attachment; filename="orders.csv"/,
+  );
+  const body = await res.text();
+  assert.match(
+    body,
+    /^reference,email,status,total_chf,created_at,paid_at,note/,
+  );
+  assert.match(body, new RegExp(paidOrder.reference));
+});
+
+test("GET /orders/:id shows the order and its items", async () => {
+  const res = await get(`/orders/${paidOrder.id}`, await authed());
+  assert.equal(res.status, 200);
+  const body = await res.text();
+  assert.match(body, new RegExp(paidOrder.reference));
+  assert.match(body, new RegExp(paidOrder.items[0].title));
+});
+
+test("GET /orders/:id is a 404 page for an unknown order", async () => {
+  const res = await get("/orders/999", await authed());
+  assert.equal(res.status, 404);
+  assert.match(await res.text(), /does not exist/);
+});
+
+test("POST status redirects back to the order", async () => {
+  const res = await form(`/orders/${paidOrder.id}/status`, await authed(), {
+    status: "pending",
+  });
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get("location"), `/orders/${paidOrder.id}`);
+});
+
+test("POST status with a bad value bounces back without calling the API", async () => {
+  // If it reached the API the mock would 400/404; the admin rejects it first and
+  // just redirects to the order, so onUnhandledRequest never fires.
+  const res = await form(`/orders/${paidOrder.id}/status`, await authed(), {
+    status: "shipped",
+  });
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get("location"), `/orders/${paidOrder.id}`);
+});
+
+test("POST note saves and redirects; an over-long note is a 400 with the value kept", async () => {
+  const cookie = await authed();
+  const ok = await form(`/orders/${paidOrder.id}/note`, cookie, {
+    note: "Called about pickup.",
+  });
+  assert.equal(ok.status, 302);
+  assert.equal(ok.headers.get("location"), `/orders/${paidOrder.id}`);
+
+  const tooLong = await form(`/orders/${paidOrder.id}/note`, cookie, {
+    note: "x".repeat(2001),
+  });
+  assert.equal(tooLong.status, 400);
+  const body = await tooLong.text();
+  assert.match(body, /Keep the note under/);
+  assert.match(body, /xxxx/); // the attempted note is preserved in the field
+});
+
+test("POST resend redirects with the resent flash", async () => {
+  const res = await form(`/orders/${paidOrder.id}/resend`, await authed(), {});
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get("location"), `/orders/${paidOrder.id}?sent=1`);
+});
+
+test("an unreachable/erroring API reads as a 502 service page", async () => {
+  server.use(
+    http.get("*/admin/orders", () =>
+      HttpResponse.json({ error: "boom" }, { status: 503 }),
+    ),
+  );
+  const res = await get("/orders", await authed());
+  assert.equal(res.status, 502);
+  assert.match(await res.text(), /could not be reached/);
 });
