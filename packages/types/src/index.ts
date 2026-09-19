@@ -76,7 +76,9 @@ export type OrderStatus = "pending" | "paid" | "cancelled";
 // Caps on how much one order can carry. These are server-side integrity, not
 // abuse defence — the honeypot and per-IP rate limiting the plan calls for
 // guard the shop's public checkout, which is the surface a stranger can reach.
-// This endpoint is internal and only ever sees the shop process.
+// This endpoint is internal and only ever sees the shop process. Because each
+// (product, size) variant may appear at most once (see orderInput), MAX_LINE_QTY
+// is a real per-variant ceiling, not one a repeated line could multiply past.
 export const MAX_ORDER_LINES = 20;
 export const MAX_LINE_QTY = 10;
 
@@ -93,11 +95,25 @@ export const orderLineInput = z.object({
 });
 export type OrderLineInput = z.infer<typeof orderLineInput>;
 
+// A variant is a product and, if it has sizes, its chosen size. The cart is
+// keyed by variant, so a well-formed one never repeats one; a payload that does
+// is rejected rather than summed, which is what keeps MAX_LINE_QTY a real
+// per-variant ceiling instead of one N duplicate lines could multiply past.
+function variantKey(line: OrderLineInput): string {
+  return `${line.product_id}:${line.size_id ?? "none"}`;
+}
+
 // The whole order the checkout posts. No phone (everything is pickup-only) and
 // no note (that is the admin's field, not the customer's).
 export const orderInput = z.object({
   email: z.string().trim().toLowerCase().pipe(z.email().max(254)),
-  items: z.array(orderLineInput).min(1).max(MAX_ORDER_LINES),
+  items: z
+    .array(orderLineInput)
+    .min(1)
+    .max(MAX_ORDER_LINES)
+    .refine((items) => new Set(items.map(variantKey)).size === items.length, {
+      error: "each product and size may appear at most once",
+    }),
 });
 export type OrderInput = z.infer<typeof orderInput>;
 

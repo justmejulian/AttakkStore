@@ -111,37 +111,40 @@ function newToken(): string {
   return randomBytes(16).toString("hex");
 }
 
-const create = db.transaction((input: OrderInput): OrderWithItems => {
-  // Price and validate every line first: a bad line throws before any row is
-  // written, and the transaction rolls the whole thing back.
-  const priced = input.items.map(priceLine);
-  const total = priced.reduce((sum, l) => sum + l.unit_price_rappen * l.qty, 0);
-  const token = newToken();
+// A transaction so a bad line throws before any row is written and the whole
+// order rolls back. better-sqlite3 wraps this into a plain callable, so it is
+// the exported entry point directly rather than behind another function.
+export const createOrder = db.transaction(
+  (input: OrderInput): OrderWithItems => {
+    // Price and validate every line first.
+    const priced = input.items.map(priceLine);
+    const total = priced.reduce(
+      (sum, line) => sum + line.unit_price_rappen * line.qty,
+      0,
+    );
+    const token = newToken();
 
-  // The RF reference is derived from the order id, which only exists after the
-  // insert, so the row goes in with the (already unique) token as a placeholder
-  // reference and is stamped with its real reference immediately after.
-  const info = insertOrderStmt.run({
-    reference: token,
-    token,
-    email: input.email,
-    total_rappen: total,
-  });
-  const id = Number(info.lastInsertRowid);
-  setReferenceStmt.run(rfReference(id), id);
+    // The RF reference is derived from the order id, which only exists after
+    // the insert, so the row goes in with the (already unique) token as a
+    // placeholder reference and is stamped with its real reference right after.
+    const info = insertOrderStmt.run({
+      reference: token,
+      token,
+      email: input.email,
+      total_rappen: total,
+    });
+    const id = Number(info.lastInsertRowid);
+    setReferenceStmt.run(rfReference(id), id);
 
-  for (const line of priced) {
-    insertItemStmt.run({ order_id: id, ...line });
-  }
+    for (const line of priced) {
+      insertItemStmt.run({ order_id: id, ...line });
+    }
 
-  const order = getOrder(id);
-  if (!order) throw new Error(`order ${id} missing right after insert`);
-  return order;
-});
-
-export function createOrder(input: OrderInput): OrderWithItems {
-  return create(input);
-}
+    const order = getOrder(id);
+    if (!order) throw new Error(`order ${id} missing right after insert`);
+    return order;
+  },
+);
 
 export function getOrder(id: number): OrderWithItems | undefined {
   const order = orderByIdStmt.get(id) as Order | undefined;

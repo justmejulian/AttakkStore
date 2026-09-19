@@ -54,6 +54,24 @@ test("POST /orders rejects a malformed body with 400", async () => {
   assert.equal((await post({})).status, 400);
 });
 
+test("POST /orders rejects a repeated variant with 400", async () => {
+  // Two lines for the same product and size would let MAX_LINE_QTY be doubled;
+  // the schema requires each variant at most once, so this never reaches pricing.
+  const sizeId = (
+    db
+      .prepare("SELECT id FROM product_sizes WHERE product_id = 10 LIMIT 1")
+      .get() as { id: number }
+  ).id;
+  const res = await post({
+    email: "buyer@example.com",
+    items: [
+      { product_id: 10, size_id: sizeId, qty: 10 },
+      { product_id: 10, size_id: sizeId, qty: 10 },
+    ],
+  });
+  assert.equal(res.status, 400);
+});
+
 test("POST /orders maps an unpurchasable product to 422", async () => {
   const res = await post({
     email: "buyer@example.com",
