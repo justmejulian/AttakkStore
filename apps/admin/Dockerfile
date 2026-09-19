@@ -13,7 +13,10 @@ WORKDIR /repo
 FROM base AS build
 COPY . .
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
-RUN pnpm --filter @attakk/admin build
+# `@attakk/admin...` builds this app and its workspace dependencies (@attakk/types)
+# in order: the admin's build reads the built types .d.ts, and deploy copies the
+# built types dist and zod into the bundle so `node dist/index.js` can load them.
+RUN pnpm --filter "@attakk/admin..." build
 RUN pnpm --filter @attakk/admin deploy --prod /app
 
 FROM base AS runtime

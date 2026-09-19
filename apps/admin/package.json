@@ -10,19 +10,22 @@
     "dist"
   ],
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --conditions=source src/index.ts",
     "dev:mock": "MOCK_API=1 tsx watch --conditions=source --import @attakk/mocks/register src/index.ts",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "test": "tsx --conditions=source --test \"src/**/*.test.ts\""
   },
   "dependencies": {
+    "@attakk/types": "workspace:*",
     "@hono/node-server": "^2.1.1",
     "hono": "^4.13.8"
   },
   "devDependencies": {
     "@attakk/mocks": "workspace:*",
     "@types/node": "^26.6.2",
+    "msw": "^2.15.0",
     "tsx": "^4.23.13",
     "typescript": "^6.0.3"
   }

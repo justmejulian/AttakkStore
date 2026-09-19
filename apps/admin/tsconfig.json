@@ -7,6 +7,12 @@
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
+    // Resolve @attakk/types to its TypeScript source, so `check`, tests and dev
+    // type-check against the live source with no build step. `check` is noEmit,
+    // so pulling in a sibling package's source is free. The emitting build
+    // (tsconfig.build.json) drops this condition and reads the built .d.ts
+    // instead — emitting while a source file sits outside rootDir would fail.
+    "customConditions": ["source"],
     "outDir": "dist",
     "rootDir": "src",
     "sourceMap": true,

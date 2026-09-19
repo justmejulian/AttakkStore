@@ -35,6 +35,9 @@ importers:
 
   apps/admin:
     dependencies:
+      '@attakk/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       '@hono/node-server':
         specifier: ^2.1.1
         version: 2.1.1(hono@4.13.8)
@@ -48,6 +51,9 @@ importers:
       '@types/node':
         specifier: ^26.6.2
         version: 26.6.2
+      msw:
+        specifier: ^2.15.0
+        version: 2.15.0(@types/node@26.6.2)(typescript@6.0.3)
       tsx:
         specifier: ^4.23.13
         version: 4.23.13
