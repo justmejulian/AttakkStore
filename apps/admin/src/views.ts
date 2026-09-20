@@ -1,6 +1,7 @@
 import {
   type AdminProductRow,
   type Drop,
+  MAX_ALT_LEN,
   MAX_FIT_LEN,
   MAX_FIT_URL_LEN,
   MAX_PRODUCT_DESCRIPTION_LEN,
@@ -12,6 +13,7 @@ import {
   type OrderStatus,
   type OrderWithItems,
   PRODUCT_STATUSES,
+  type ProductImage,
   type ProductWithSizes,
 } from "@attakk/types";
 import { html } from "hono/html";
@@ -635,6 +637,51 @@ export function productNewPage(opts: {
   );
 }
 
+// The images section: each stored photo with a delete control, and an upload
+// form. The thumbnail is the row's inlined `placeholder` (a tiny blurred webp
+// data URI) — the full derivatives live on the API's volume and are served by the
+// storefront later, so this is the self-contained preview the admin can show now.
+// Alt text is set at upload; editing it or reordering needs an API endpoint the
+// image routes don't have yet, so those are out of this step.
+function imagesSection(opts: {
+  productId: number;
+  images: ProductImage[];
+  error?: string;
+}): Html {
+  return html`<h2>Images</h2>
+    ${opts.error ? html`<p role="alert">${opts.error}</p>` : ""}
+    ${
+      opts.images.length === 0
+        ? html`<p>No images yet.</p>`
+        : opts.images.map(
+            (img) =>
+              html`<figure>
+                <img src="${img.placeholder}" alt="${img.alt}" width="120" />
+                <figcaption>${img.alt || "(no alt text)"}</figcaption>
+                <form
+                  method="post"
+                  action="/products/${opts.productId}/images/${img.id}/delete"
+                >
+                  <button type="submit">Delete image</button>
+                </form>
+              </figure>`,
+          )
+    }
+    <form
+      method="post"
+      action="/products/${opts.productId}/images"
+      enctype="multipart/form-data"
+    >
+      <p>
+        <label>Image file <input type="file" name="file" required /></label>
+      </p>
+      <p>
+        <label>Alt text <input name="alt" maxlength="${MAX_ALT_LEN}" /></label>
+      </p>
+      <button type="submit">Upload image</button>
+    </form>`;
+}
+
 // The product edit page: two independent forms — the fields (with the current
 // values and a franc price hint) and the size editor — plus the delete control.
 // `errors` marks a field the fields form rejected; `sizeState` supplies the size
@@ -648,6 +695,7 @@ export function productEditPage(opts: {
   errors?: Partial<Record<keyof ProductFormValues, string>>;
   sizeState: { existing: SizeRowValues[]; fresh: NewSizeValues[] };
   sizesError?: string;
+  imageError?: string;
   deleteError?: string;
   flash?: string;
 }) {
@@ -673,6 +721,11 @@ export function productEditPage(opts: {
         existing: opts.sizeState.existing,
         fresh: opts.sizeState.fresh,
         error: opts.sizesError,
+      })}
+      ${imagesSection({
+        productId: product.id,
+        images: product.images,
+        error: opts.imageError,
       })}
 
       <h2>Delete</h2>

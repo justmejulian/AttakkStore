@@ -306,7 +306,12 @@ async function apiWrite(
   if (res.status === 404) {
     return { errorPage: await c.html(notFoundPage(user), 404) };
   }
-  if (res.status === 400 || res.status === 409 || res.status === 422) {
+  if (
+    res.status === 400 ||
+    res.status === 409 ||
+    res.status === 413 ||
+    res.status === 422
+  ) {
     const body = (await res.json().catch(() => null)) as {
       error?: string;
     } | null;
@@ -720,4 +725,83 @@ app.post("/products/:id/delete", async (c) => {
     );
   }
   return c.redirect("/products?deleted=1");
+});
+
+// The API's image-upload refusals as a message for the edit page.
+function imageErrorMessage(code: string): string {
+  switch (code) {
+    case "too_large":
+      return "That image is too large.";
+    case "no_file":
+      return "Choose an image file to upload.";
+    case "alt_too_long":
+      return "The alt text is too long.";
+    case "invalid_upload":
+    case "unreadable":
+      return "That file could not be read as an image.";
+    default:
+      return `The upload was refused (${code}).`;
+  }
+}
+
+// Re-render the edit page with an image error, re-reading the product so its
+// fields, sizes and remaining images are shown intact beside the message.
+async function renderImageError(
+  c: Context<AdminEnv>,
+  id: string,
+  message: string,
+): Promise<Response> {
+  const r = await apiRequest(c, productPath(id));
+  if ("errorPage" in r) return r.errorPage;
+  const product = (await r.res.json()) as ProductWithSizes;
+  return c.html(
+    productEditPage({
+      user: c.get("user"),
+      product,
+      values: productValues(product),
+      sizeState: sizeStateFromProduct(product),
+      imageError: message,
+    }),
+    400,
+  );
+}
+
+// Attach a photo. The admin holds no files: it reads the upload and forwards it
+// to the API as multipart, which processes and stores it. The API's image routes
+// live at the root (/products/:id/images, /images/:id), not under /admin. A
+// refused upload (too large, unreadable) re-renders with the reason.
+app.post("/products/:id/images", async (c) => {
+  const id = c.req.param("id");
+  const form = await c.req.parseBody();
+  const file = form.file;
+  const alt = formStr(form.alt);
+
+  const body = new FormData();
+  if (file instanceof File) body.append("file", file);
+  if (alt) body.append("alt", alt);
+
+  const w = await apiWrite(c, `/products/${encodeURIComponent(id)}/images`, {
+    method: "POST",
+    body,
+  });
+  if ("errorPage" in w) return w.errorPage;
+  if ("conflict" in w) {
+    return renderImageError(c, id, imageErrorMessage(w.conflict));
+  }
+  return c.redirect(`/products/${id}?saved=1`);
+});
+
+// Remove a photo. The API deletes the row and, once no row references the same
+// content hash, its files. A missing image is the shared 404.
+app.post("/products/:id/images/:imageId/delete", async (c) => {
+  const id = c.req.param("id");
+  const imageId = c.req.param("imageId");
+  const w = await apiWrite(c, `/images/${encodeURIComponent(imageId)}`, {
+    method: "DELETE",
+  });
+  if ("errorPage" in w) return w.errorPage;
+  if ("conflict" in w) {
+    return renderImageError(c, id, "That image could not be deleted.");
+  }
+  return c.redirect(`/products/${id}?saved=1`);
 });

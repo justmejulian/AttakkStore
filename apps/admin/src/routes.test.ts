@@ -476,3 +476,75 @@ test("POST /products/:id/delete on an ordered product is refused with a hide hin
   assert.equal(res.status, 409);
   assert.match(await res.text(), /hidden instead/);
 });
+
+// A multipart upload request with a small dummy file.
+function upload(path: string, cookie: string, alt?: string): Promise<Response> {
+  const body = new FormData();
+  body.append(
+    "file",
+    new Blob([new Uint8Array([1, 2, 3])], { type: "image/webp" }),
+    "test.webp",
+  );
+  if (alt !== undefined) body.append("alt", alt);
+  return Promise.resolve(
+    app.request(path, { method: "POST", headers: { cookie }, body }),
+  );
+}
+
+test("the edit page shows the images with an upload form", async () => {
+  const res = await get(`/products/${jerseyProduct.id}`, await authed());
+  const body = await res.text();
+  assert.match(
+    body,
+    new RegExp(`action="/products/${jerseyProduct.id}/images"`),
+  );
+  assert.match(body, /enctype="multipart\/form-data"/);
+  assert.match(body, /type="file"/);
+  // A delete control for an existing image.
+  assert.match(
+    body,
+    new RegExp(
+      `/products/${jerseyProduct.id}/images/${jerseyProduct.images[0].id}/delete`,
+    ),
+  );
+});
+
+test("POST an image upload forwards it and redirects", async () => {
+  const res = await upload(
+    `/products/${jerseyProduct.id}/images`,
+    await authed(),
+    "A jersey",
+  );
+  assert.equal(res.status, 302);
+  assert.equal(
+    res.headers.get("location"),
+    `/products/${jerseyProduct.id}?saved=1`,
+  );
+});
+
+test("POST an image delete redirects back to the product", async () => {
+  const res = await form(
+    `/products/${jerseyProduct.id}/images/${jerseyProduct.images[0].id}/delete`,
+    await authed(),
+    {},
+  );
+  assert.equal(res.status, 302);
+  assert.equal(
+    res.headers.get("location"),
+    `/products/${jerseyProduct.id}?saved=1`,
+  );
+});
+
+test("an oversized upload re-renders the page with the reason", async () => {
+  server.use(
+    http.post("*/products/:id/images", () =>
+      HttpResponse.json({ error: "too_large" }, { status: 413 }),
+    ),
+  );
+  const res = await upload(
+    `/products/${jerseyProduct.id}/images`,
+    await authed(),
+  );
+  assert.equal(res.status, 400);
+  assert.match(await res.text(), /too large/);
+});
