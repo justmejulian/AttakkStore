@@ -1,4 +1,5 @@
 import {
+  dropInput,
   dropStatusInput,
   loginInput,
   MAX_NOTE_LEN,
@@ -23,6 +24,9 @@ import { type AdminEnv, requireAuth } from "./auth.js";
 import { ordersToCsv } from "./csv.js";
 import { clearSession, getSession, setSession } from "./session.js";
 import {
+  type DropFormValues,
+  dropEditPage,
+  dropNewPage,
   dropsPage,
   homePage,
   loginPage,
@@ -339,7 +343,9 @@ const PRODUCT_FIELDS = [
   "sort",
 ] as const;
 
-type ProductForm = Record<string, string | File>;
+// A parsed form body: hono's parseBody yields string values (and File for a file
+// input). Shared by the product and drop form parsers, so named for neither.
+type FormBody = Record<string, string | File>;
 
 function formStr(value: string | File | undefined): string {
   return typeof value === "string" ? value : "";
@@ -358,7 +364,7 @@ function formNum(value: string | File | undefined): unknown {
 
 // The submitted fields as productInput expects them (numbers parsed), for the zod
 // check, and — separately — as strings, to echo back into the form on a reject.
-function productInputFromForm(form: ProductForm): Record<string, unknown> {
+function productInputFromForm(form: FormBody): Record<string, unknown> {
   return {
     slug: formStr(form.slug),
     name: formStr(form.name),
@@ -373,13 +379,11 @@ function productInputFromForm(form: ProductForm): Record<string, unknown> {
 }
 
 // The create body: the shared fields plus the drop to create into.
-function productCreateInputFromForm(
-  form: ProductForm,
-): Record<string, unknown> {
+function productCreateInputFromForm(form: FormBody): Record<string, unknown> {
   return { ...productInputFromForm(form), drop_id: formNum(form.drop_id) };
 }
 
-function formValues(form: ProductForm): ProductFormValues {
+function formValues(form: FormBody): ProductFormValues {
   return Object.fromEntries(
     PRODUCT_FIELDS.map((f) => [f, formStr(form[f])]),
   ) as ProductFormValues;
@@ -424,33 +428,34 @@ function productValues(product: Product): ProductFormValues {
   };
 }
 
-// Zod issues to a per-field message, first message per field wins. Only issues on
-// the shared form fields are mapped: the create schema also carries drop_id, whose
-// error the create route surfaces separately (as dropError), so it is skipped here
-// rather than smuggled into a map whose type is these fields alone.
-function fieldErrors(
+// Zod issues to a per-field message, first message per field wins. Generic over the
+// form's field set (the product and drop forms both use it): only issues whose path
+// names one of `fields` are mapped, so an issue on a field the map's type does not
+// carry — the create schema's drop_id, surfaced separately as dropError — is skipped
+// rather than smuggled in.
+function fieldErrors<T extends string>(
+  fields: readonly T[],
   issues: readonly { path: PropertyKey[]; message: string }[],
-): Partial<Record<keyof ProductFormValues, string>> {
-  const out: Partial<Record<keyof ProductFormValues, string>> = {};
+): Partial<Record<T, string>> {
+  const out: Partial<Record<T, string>> = {};
   for (const issue of issues) {
     const key = issue.path[0];
     if (
       typeof key === "string" &&
-      (PRODUCT_FIELDS as readonly string[]).includes(key) &&
+      (fields as readonly string[]).includes(key) &&
       !(key in out)
     ) {
-      out[key as keyof ProductFormValues] = issue.message;
+      out[key as T] = issue.message;
     }
   }
   return out;
 }
 
-// The API's write refusals mapped to a field message. slug_taken is the one an
-// edit can hit (the product exists and its drop is fixed); the rest are create or
-// size concerns, mapped defensively so an unexpected code still reads on the slug.
-function conflictErrors(
-  code: string,
-): Partial<Record<keyof ProductFormValues, string>> {
+// The API's write refusals mapped to a slug-field message. slug_taken is the one a
+// product or drop edit can hit (the row exists and its slug is the only unique
+// column); anything else is mapped defensively so an unexpected code still reads on
+// the slug. Both forms carry a `slug` field, so one shape serves both.
+function conflictErrors(code: string): { slug: string } {
   if (code === "slug_taken") {
     return { slug: "That slug is already in use." };
   }
@@ -511,7 +516,7 @@ app.post("/products", async (c) => {
   if (!parsed.success) {
     const issues = parsed.error.issues;
     const dropError = issues.find((i) => i.path[0] === "drop_id")?.message;
-    return rerender(fieldErrors(issues), dropError, 400);
+    return rerender(fieldErrors(PRODUCT_FIELDS, issues), dropError, 400);
   }
 
   const w = await apiWrite(c, "/admin/products", jsonBody("POST", parsed.data));
@@ -558,7 +563,7 @@ function sizeStateFromProduct(product: ProductWithSizes): {
 // existing rows plus non-blank new rows) and the rows as submitted, so a reject
 // re-renders exactly what was typed. A removed row drops out of the desired list;
 // a blank new row is ignored.
-function sizesFromForm(form: ProductForm): {
+function sizesFromForm(form: FormBody): {
   sizes: unknown;
   state: { existing: SizeRowValues[]; fresh: NewSizeValues[] };
 } {
@@ -644,7 +649,8 @@ app.post("/products/:id", async (c) => {
     );
   };
 
-  if (!parsed.success) return reject(fieldErrors(parsed.error.issues), 400);
+  if (!parsed.success)
+    return reject(fieldErrors(PRODUCT_FIELDS, parsed.error.issues), 400);
 
   const w = await apiWrite(c, productPath(id), jsonBody("PATCH", parsed.data));
   if ("errorPage" in w) return w.errorPage;
@@ -824,6 +830,96 @@ function dropPath(id: string, suffix = ""): string {
   return `/admin/drops/${encodeURIComponent(id)}${suffix}`;
 }
 
+const DROP_FIELDS = [
+  "slug",
+  "name",
+  "year",
+  "no",
+  "status",
+  "sort",
+  "tagline",
+  "body",
+  "note",
+  "color_primary",
+  "color_secondary",
+  "color_accent",
+  "color_text",
+  "display_font",
+  "theme_base",
+] as const;
+
+// The submitted fields as dropInput expects them (numbers parsed), for the zod
+// check. Create and edit share one shape — a drop has no parent to name.
+function dropInputFromForm(form: FormBody): Record<string, unknown> {
+  return {
+    slug: formStr(form.slug),
+    name: formStr(form.name),
+    year: formNum(form.year),
+    no: formNum(form.no),
+    status: formStr(form.status),
+    sort: formNum(form.sort),
+    tagline: formStr(form.tagline),
+    body: formStr(form.body),
+    note: formStr(form.note),
+    color_primary: formStr(form.color_primary),
+    color_secondary: formStr(form.color_secondary),
+    color_accent: formStr(form.color_accent),
+    color_text: formStr(form.color_text),
+    display_font: formStr(form.display_font),
+    theme_base: formStr(form.theme_base),
+  };
+}
+
+// The submitted values as strings, to echo back into the form on a reject.
+function dropFormValues(form: FormBody): DropFormValues {
+  return Object.fromEntries(
+    DROP_FIELDS.map((f) => [f, formStr(form[f])]),
+  ) as DropFormValues;
+}
+
+function dropValues(drop: Drop): DropFormValues {
+  return {
+    slug: drop.slug,
+    name: drop.name,
+    year: String(drop.year),
+    no: String(drop.no),
+    status: drop.status,
+    sort: String(drop.sort),
+    tagline: drop.tagline,
+    body: drop.body,
+    note: drop.note,
+    color_primary: drop.color_primary,
+    color_secondary: drop.color_secondary,
+    color_accent: drop.color_accent,
+    color_text: drop.color_text,
+    display_font: drop.display_font,
+    theme_base: drop.theme_base,
+  };
+}
+
+// A blank set of field values for a fresh create form, with the defaults the schema
+// also carries (a draft, sort 0) plus the shop's default font and base and the
+// current year, so most creates only fill in a name, slug and number.
+function blankDropValues(): DropFormValues {
+  return {
+    slug: "",
+    name: "",
+    year: String(new Date().getFullYear()),
+    no: "",
+    status: "draft",
+    sort: "0",
+    tagline: "",
+    body: "",
+    note: "",
+    color_primary: "",
+    color_secondary: "",
+    color_accent: "",
+    color_text: "",
+    display_font: "Antonio",
+    theme_base: "light",
+  };
+}
+
 // The drops list: every drop, any status, with the per-row archive control. Reuses
 // loadDrops, the same read the product create form's drop picker uses.
 app.get("/drops", async (c) => {
@@ -831,6 +927,112 @@ app.get("/drops", async (c) => {
   if ("errorPage" in d) return d.errorPage;
   const flash = c.req.query("updated") ? "Status updated." : undefined;
   return c.html(dropsPage({ user: c.get("user"), drops: d.drops, flash }));
+});
+
+// The new-drop form. Registered before /drops/:id so "new" is never read as an id.
+app.get("/drops/new", (c) => {
+  return c.html(
+    dropNewPage({ user: c.get("user"), values: blankDropValues() }),
+  );
+});
+
+// Create a drop. Validated with the same dropInput zod the API enforces; a bad
+// body or a slug the API rejects (409) re-render the form with the values kept and
+// the error placed. On success, land on the new drop's edit page.
+app.post("/drops", async (c) => {
+  const form = await c.req.parseBody();
+  const parsed = dropInput.safeParse(dropInputFromForm(form));
+
+  const reject = (
+    errors: Partial<Record<keyof DropFormValues, string>>,
+    status: 400 | 409,
+  ): Promise<Response> =>
+    Promise.resolve(
+      c.html(
+        dropNewPage({
+          user: c.get("user"),
+          values: dropFormValues(form),
+          errors,
+        }),
+        status,
+      ),
+    );
+
+  if (!parsed.success)
+    return reject(fieldErrors(DROP_FIELDS, parsed.error.issues), 400);
+
+  const w = await apiWrite(c, "/admin/drops", jsonBody("POST", parsed.data));
+  if ("errorPage" in w) return w.errorPage;
+  if ("conflict" in w) {
+    return reject(
+      conflictErrors(w.conflict),
+      w.conflict === "slug_taken" ? 409 : 400,
+    );
+  }
+  const created = (await w.res.json()) as Drop;
+  return c.redirect(`/drops/${created.id}?saved=1`);
+});
+
+app.get("/drops/:id", async (c) => {
+  const r = await apiRequest(c, dropPath(c.req.param("id")));
+  if ("errorPage" in r) return r.errorPage;
+  const drop = (await r.res.json()) as Drop;
+  const flash = c.req.query("saved") ? "Saved." : undefined;
+  return c.html(
+    dropEditPage({
+      user: c.get("user"),
+      id: String(drop.id),
+      values: dropValues(drop),
+      flash,
+    }),
+  );
+});
+
+// Save a drop's fields (status included). Validated with the same dropInput zod;
+// on a bad body or a slug the API rejects, the form comes back with the submitted
+// values kept and the error beside the field. The reject re-renders from the
+// submitted values, not a stored drop (the drop screen has no derived display
+// fields) — but a bad body still confirms the drop exists first, so editing a
+// missing drop is a 404, not a 400 form for a row that isn't there. On success,
+// redirect with a flash.
+app.post("/drops/:id", async (c) => {
+  const id = c.req.param("id");
+  const form = await c.req.parseBody();
+  const parsed = dropInput.safeParse(dropInputFromForm(form));
+
+  const reject = (
+    errors: Partial<Record<keyof DropFormValues, string>>,
+    status: 400 | 409,
+  ): Promise<Response> =>
+    Promise.resolve(
+      c.html(
+        dropEditPage({
+          user: c.get("user"),
+          id,
+          values: dropFormValues(form),
+          errors,
+        }),
+        status,
+      ),
+    );
+
+  if (!parsed.success) {
+    // A bad body renders the form; confirm the drop exists first so a bad-body
+    // edit of a missing drop is the shared 404, matching the product edit route.
+    const r = await apiRequest(c, dropPath(id));
+    if ("errorPage" in r) return r.errorPage;
+    return reject(fieldErrors(DROP_FIELDS, parsed.error.issues), 400);
+  }
+
+  const w = await apiWrite(c, dropPath(id), jsonBody("PATCH", parsed.data));
+  if ("errorPage" in w) return w.errorPage;
+  if ("conflict" in w) {
+    return reject(
+      conflictErrors(w.conflict),
+      w.conflict === "slug_taken" ? 409 : 400,
+    );
+  }
+  return c.redirect(`/drops/${id}?saved=1`);
 });
 
 // The archive control: flip a drop's status from the list. The dropdown only ever

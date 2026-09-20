@@ -1,14 +1,22 @@
 import {
   type AdminProductRow,
+  DISPLAY_FONTS,
   type Drop,
   DROP_STATUSES,
   MAX_ALT_LEN,
+  MAX_DROP_BODY_LEN,
+  MAX_DROP_NAME_LEN,
+  MAX_DROP_NOTE_LEN,
+  MAX_DROP_TAGLINE_LEN,
+  MAX_DROP_YEAR,
   MAX_FIT_LEN,
   MAX_FIT_URL_LEN,
+  MAX_HEX_COLOR_LEN,
   MAX_PRODUCT_DESCRIPTION_LEN,
   MAX_PRODUCT_NAME_LEN,
   MAX_SIZE_LABEL_LEN,
   MAX_SLUG_LEN,
+  MIN_DROP_YEAR,
   ORDER_STATUSES,
   type OrderListRow,
   type OrderStatus,
@@ -16,6 +24,7 @@ import {
   PRODUCT_STATUSES,
   type ProductImage,
   type ProductWithSizes,
+  THEME_BASES,
 } from "@attakk/types";
 import { html } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
@@ -34,6 +43,29 @@ export type ProductFormValues = Record<
   | "min_orders"
   | "status"
   | "sort",
+  string
+>;
+
+// The fields of the drop create/edit form, as strings — the values echoed back
+// into the inputs, whether they came from the stored drop or a rejected submission.
+// The colours are the theming the shop reads off the drop row; display_font and
+// theme_base are selects over the fixed lists.
+export type DropFormValues = Record<
+  | "slug"
+  | "name"
+  | "year"
+  | "no"
+  | "status"
+  | "sort"
+  | "tagline"
+  | "body"
+  | "note"
+  | "color_primary"
+  | "color_secondary"
+  | "color_accent"
+  | "color_text"
+  | "display_font"
+  | "theme_base",
   string
 >;
 
@@ -369,9 +401,8 @@ function dropStatusControl(drop: Drop): Html {
 }
 
 // The drops list: every drop, any status, in the order the API returns (sort then
-// id). Each row carries the archive control. The name is plain text for now; the
-// create and edit screens (with the theming fields) land next, and turn it into an
-// edit link. `flash` confirms a status change.
+// id). Each row's name links to its edit screen (the theming fields), and carries
+// the archive control. `flash` confirms a status change or a create.
 export function dropsPage(opts: {
   user: Session;
   drops: Drop[];
@@ -382,6 +413,7 @@ export function dropsPage(opts: {
     opts.user,
     html`<h1>Drops</h1>
       ${opts.flash ? html`<p role="status">${opts.flash}</p>` : ""}
+      <p><a href="/drops/new">New drop</a></p>
       ${
         opts.drops.length === 0
           ? html`<p>No drops yet.</p>`
@@ -398,7 +430,7 @@ export function dropsPage(opts: {
                 ${opts.drops.map(
                   (d) =>
                     html`<tr>
-                      <td>${d.name}</td>
+                      <td><a href="/drops/${d.id}">${d.name}</a></td>
                       <td>${d.year}</td>
                       <td>${d.no}</td>
                       <td>${dropStatusControl(d)}</td>
@@ -407,6 +439,164 @@ export function dropsPage(opts: {
               </tbody>
             </table>`
       }`,
+  );
+}
+
+// The drop fields shared by the create and edit forms. Slug, name, year and number
+// identify the collection; tagline, body and note are its copy (note is internal);
+// the four colours plus the display font and light/dark base are the theming the
+// shop reads off the row. Colours are plain hex text, optional — blank inherits the
+// site palette — with no contrast check; readability is left to whoever enters
+// them. The caller wraps this in its own <form>.
+function dropFieldset(opts: {
+  values: DropFormValues;
+  errors?: Partial<Record<keyof DropFormValues, string>>;
+}): Html {
+  const { values, errors } = opts;
+  return html`${textField({
+      label: "Slug",
+      name: "slug",
+      values,
+      errors,
+      required: true,
+      maxlength: MAX_SLUG_LEN,
+      hint: "Lowercase words joined by hyphens — the storefront URL.",
+    })}
+    ${textField({
+      label: "Name",
+      name: "name",
+      values,
+      errors,
+      required: true,
+      maxlength: MAX_DROP_NAME_LEN,
+    })}
+    ${textField({
+      label: "Year",
+      name: "year",
+      values,
+      errors,
+      type: "number",
+      required: true,
+      min: MIN_DROP_YEAR,
+      max: MAX_DROP_YEAR,
+    })}
+    ${textField({
+      label: "Number",
+      name: "no",
+      values,
+      errors,
+      type: "number",
+      required: true,
+      min: 0,
+      hint: "The drop's number in the sequence.",
+    })}
+    ${textField({
+      label: "Tagline",
+      name: "tagline",
+      values,
+      errors,
+      maxlength: MAX_DROP_TAGLINE_LEN,
+    })}
+    <p>
+      <label
+        >Body
+        <textarea name="body" rows="4" maxlength="${MAX_DROP_BODY_LEN}">
+${values.body}</textarea>
+      </label>
+    </p>
+    <p>
+      <label
+        >Note (internal)
+        <textarea name="note" rows="2" maxlength="${MAX_DROP_NOTE_LEN}">
+${values.note}</textarea>
+      </label>
+    </p>
+    ${selectField({
+      label: "Status",
+      name: "status",
+      values,
+      options: DROP_STATUSES,
+    })}
+    ${textField({
+      label: "Sort",
+      name: "sort",
+      values,
+      errors,
+      type: "number",
+      min: 0,
+    })}
+    <h2>Theming</h2>
+    ${(
+      [
+        "color_primary",
+        "color_secondary",
+        "color_accent",
+        "color_text",
+      ] as const
+    ).map((name) =>
+      textField({
+        label: name.replace("color_", "Colour "),
+        name,
+        values,
+        errors,
+        maxlength: MAX_HEX_COLOR_LEN,
+        hint: "#rrggbb, or blank for the site default.",
+      }),
+    )}
+    ${selectField({
+      label: "Display font",
+      name: "display_font",
+      values,
+      options: DISPLAY_FONTS,
+    })}
+    ${selectField({
+      label: "Theme base",
+      name: "theme_base",
+      values,
+      options: THEME_BASES,
+    })}`;
+}
+
+// The new-drop form: the shared fields, posting to create. `errors` marks a
+// rejected field (a bad slug, a colour that is not hex, a year out of range).
+export function dropNewPage(opts: {
+  user: Session;
+  values: DropFormValues;
+  errors?: Partial<Record<keyof DropFormValues, string>>;
+}) {
+  return shell(
+    "New drop",
+    opts.user,
+    html`<p><a href="/drops">← All drops</a></p>
+      <h1>New drop</h1>
+      <form method="post" action="/drops">
+        ${dropFieldset({ values: opts.values, errors: opts.errors })}
+        <button type="submit">Create drop</button>
+      </form>`,
+  );
+}
+
+// The drop edit form: the shared fields, posting to the drop's edit route. The
+// heading and form action use the id and the current name; on a reject the
+// submitted values (name included) are shown, so no stored drop is re-read.
+// `flash` confirms a save. There is no delete — a drop is archived, not deleted.
+export function dropEditPage(opts: {
+  user: Session;
+  id: string;
+  values: DropFormValues;
+  errors?: Partial<Record<keyof DropFormValues, string>>;
+  flash?: string;
+}) {
+  return shell(
+    opts.values.name || "Drop",
+    opts.user,
+    html`<p><a href="/drops">← All drops</a></p>
+      ${opts.flash ? html`<p role="status">${opts.flash}</p>` : ""}
+      <h1>${opts.values.name}</h1>
+      <form method="post" action="/drops/${opts.id}">
+        ${dropFieldset({ values: opts.values, errors: opts.errors })}
+        <button type="submit">Save</button>
+      </form>`,
   );
 }
 
@@ -455,18 +645,21 @@ export function productsPage(opts: {
   );
 }
 
-// One text/number field of the edit form, with its value echoed back and any
-// error shown beside it. Interpolated values are escaped by hono/html, so a
-// rejected value cannot inject markup when it is rendered back into the input.
-function textField(opts: {
+// One text/number field of a form, with its value echoed back and any error shown
+// beside it. Generic over the form's field set, so the product and drop forms both
+// use it: `name` is a key of `values`, and `errors` is keyed the same. Interpolated
+// values are escaped by hono/html, so a rejected value cannot inject markup when it
+// is rendered back into the input.
+function textField<T extends string>(opts: {
   label: string;
-  name: keyof ProductFormValues;
-  values: ProductFormValues;
-  errors?: Partial<Record<keyof ProductFormValues, string>>;
+  name: T;
+  values: Record<T, string>;
+  errors?: Partial<Record<T, string>>;
   type?: "text" | "number";
   required?: boolean;
   maxlength?: number;
   min?: number;
+  max?: number;
   hint?: string;
 }): Html {
   const err = opts.errors?.[opts.name];
@@ -480,9 +673,37 @@ function textField(opts: {
         ${opts.required ? html`required` : html``}
         ${opts.maxlength ? html`maxlength="${opts.maxlength}"` : html``}
         ${opts.min !== undefined ? html`min="${opts.min}"` : html``}
+        ${opts.max !== undefined ? html`max="${opts.max}"` : html``}
     /></label>
     ${opts.hint ? html`<small>${opts.hint}</small>` : ""}
     ${err ? html`<span role="alert">${err}</span>` : ""}
+  </p>`;
+}
+
+// One select field of a form, its stored/submitted value pre-selected. Generic the
+// same way textField is, so it echoes the current choice back on a reject.
+function selectField<T extends string>(opts: {
+  label: string;
+  name: T;
+  values: Record<T, string>;
+  options: readonly string[];
+}): Html {
+  const current = opts.values[opts.name];
+  return html`<p>
+    <label
+      >${opts.label}
+      <select name="${opts.name}">
+        ${opts.options.map(
+          (o) =>
+            html`<option
+              value="${o}"
+              ${current === o ? html`selected` : html``}
+            >
+              ${o}
+            </option>`,
+        )}
+      </select></label
+    >
   </p>`;
 }
 

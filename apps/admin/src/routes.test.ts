@@ -585,3 +585,114 @@ test("POST /drops/:id/status with a bad value bounces back without calling the A
   assert.equal(res.status, 302);
   assert.equal(res.headers.get("location"), "/drops");
 });
+
+// A well-formed drop form body, callers overriding the slug so a create test does
+// not clash on a seeded slug. Exercises the theming fields the form carries.
+function dropForm(slug: string): Record<string, string> {
+  return {
+    slug,
+    name: "Nightfall",
+    year: "2026",
+    no: "4",
+    status: "draft",
+    sort: "0",
+    tagline: "After dark.",
+    body: "The night collection.",
+    note: "internal",
+    color_primary: "#0a0a0a",
+    color_secondary: "#f5f5f5",
+    color_accent: "#e11d2a",
+    color_text: "#ffffff",
+    display_font: "Antonio",
+    theme_base: "dark",
+  };
+}
+
+test("the drops list links to the new-drop form and to each drop's edit page", async () => {
+  const body = await (await get("/drops", await authed())).text();
+  assert.match(body, /href="\/drops\/new"/);
+  assert.match(body, /href="\/drops\/1"/);
+});
+
+test("GET /drops/new renders the create form", async () => {
+  const res = await get("/drops/new", await authed());
+  assert.equal(res.status, 200);
+  const body = await res.text();
+  assert.match(body, /<form method="post" action="\/drops">/);
+  assert.match(body, /name="theme_base"/);
+  assert.match(body, /name="color_primary"/);
+});
+
+test("GET /drops/:id shows the edit form with the current values", async () => {
+  const res = await get("/drops/1", await authed());
+  assert.equal(res.status, 200);
+  const body = await res.text();
+  assert.match(body, /<form method="post" action="\/drops\/1">/);
+  // Redline's stored slug and dark base are echoed into the fields.
+  assert.match(body, /value="redline"/);
+  assert.match(body, /value="dark"[^>]*selected|selected[^>]*value="dark"/);
+});
+
+test("GET /drops/:id is a 404 page for an unknown drop", async () => {
+  const res = await get("/drops/999", await authed());
+  assert.equal(res.status, 404);
+});
+
+test("POST /drops creates and lands on the new drop's edit page", async () => {
+  const res = await form("/drops", await authed(), dropForm("nightfall"));
+  assert.equal(res.status, 302);
+  // MOCK_NEW_DROP_ID = 800.
+  assert.equal(res.headers.get("location"), "/drops/800?saved=1");
+});
+
+test("POST /drops keeps the slug error on a clash", async () => {
+  // Drop 1 (seeded) owns the redline slug.
+  const res = await form("/drops", await authed(), dropForm("redline"));
+  assert.equal(res.status, 409);
+  const body = await res.text();
+  assert.match(body, /already in use/);
+  // The typed values survive the reject.
+  assert.match(body, /value="redline"/);
+});
+
+test("POST /drops is a 400 with values kept when the colour is not hex", async () => {
+  const res = await form("/drops", await authed(), {
+    ...dropForm("ok-slug"),
+    color_primary: "red",
+  });
+  assert.equal(res.status, 400);
+  assert.match(await res.text(), /value="ok-slug"/);
+});
+
+test("POST /drops/:id saves and redirects with a flash", async () => {
+  const res = await form("/drops/1", await authed(), dropForm("redline"));
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get("location"), "/drops/1?saved=1");
+});
+
+test("POST /drops/:id keeps the slug error when the API reports a clash", async () => {
+  // Editing drop 1 to take drop 2's slug (origins) is a clash.
+  const res = await form("/drops/1", await authed(), dropForm("origins"));
+  assert.equal(res.status, 409);
+  assert.match(await res.text(), /already in use/);
+});
+
+test("POST /drops/:id is a 400 with values kept when the form is invalid", async () => {
+  const res = await form("/drops/1", await authed(), {
+    ...dropForm("redline"),
+    name: "",
+  });
+  assert.equal(res.status, 400);
+  // The submitted slug is kept in the re-rendered form.
+  assert.match(await res.text(), /value="redline"/);
+});
+
+test("POST /drops/:id with a bad body on a missing drop is a 404, not a 400", async () => {
+  // A bad-body edit of a nonexistent drop confirms the drop exists first, so it is
+  // the shared 404 page rather than a 400 edit form for a row that isn't there.
+  const res = await form("/drops/999", await authed(), {
+    ...dropForm("whatever"),
+    name: "",
+  });
+  assert.equal(res.status, 404);
+});

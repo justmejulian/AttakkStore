@@ -247,8 +247,11 @@ export const MIN_DROP_YEAR = 2000;
 export const MAX_DROP_YEAR = 2100;
 
 // A six-digit hex colour like #e11d2a. Case-insensitive; the shop emits it as a
-// CSS custom property verbatim.
+// CSS custom property verbatim. MAX_HEX_COLOR_LEN is the length of a "#rrggbb"
+// value, shared so the admin's colour inputs cap at the same width the pattern
+// allows rather than a bare literal.
 export const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+export const MAX_HEX_COLOR_LEN = 7;
 
 // A drop's colour override: a valid hex, or empty to fall back to the site
 // palette. Not required — a collection that sets no colours simply inherits the
