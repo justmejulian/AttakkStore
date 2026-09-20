@@ -221,6 +221,50 @@ test("GET /admin/drops/:id serves a drop and 404s an unknown id, before the slug
   assert.equal((await fetch(`${base}/admin/drops/999`)).status, 404);
 });
 
+// A well-formed drop body, callers overriding the slug so the create/edit tests
+// don't collide on the seeded slugs.
+function dropBody(slug: string): Record<string, unknown> {
+  return {
+    slug,
+    name: "Nightfall",
+    year: 2026,
+    no: 4,
+    status: "draft",
+    display_font: "Antonio",
+    theme_base: "dark",
+  };
+}
+
+test("POST /admin/drops mirrors the API's create branches", async () => {
+  const created = await post("/admin/drops", dropBody("nightfall"));
+  assert.equal(created.status, 201);
+  assert.equal(((await created.json()) as { slug: string }).slug, "nightfall");
+
+  // A malformed body is a 400, a slug already in use a 409 — the API's codes.
+  assert.equal((await post("/admin/drops", { slug: "x" })).status, 400);
+  assert.equal((await post("/admin/drops", dropBody("redline"))).status, 409);
+});
+
+test("PATCH /admin/drops/:id mirrors the API's edit branches", async () => {
+  const ok = await patch("/admin/drops/2", {
+    ...dropBody("origins"),
+    name: "Renamed",
+    status: "live",
+  });
+  assert.equal(ok.status, 200);
+  assert.equal(((await ok.json()) as { name: string }).name, "Renamed");
+
+  // Another drop's slug is a 409; a missing drop a 404.
+  assert.equal(
+    (await patch("/admin/drops/2", dropBody("redline"))).status,
+    409,
+  );
+  assert.equal(
+    (await patch("/admin/drops/999", dropBody("ghost"))).status,
+    404,
+  );
+});
+
 test("GET /admin/products lists the rows and 404s an unknown detail id", async () => {
   const list = await fetch(`${base}/admin/products`);
   assert.equal(list.status, 200);

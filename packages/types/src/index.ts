@@ -12,7 +12,11 @@
 
 import { z } from "zod";
 
-export type DropStatus = "draft" | "live" | "archived";
+// The three states a drop moves through, as one tuple so the type, the DB check
+// constraint's mirror, and the admin's write zod read from a single list rather
+// than three that could drift (the same shape PRODUCT_STATUSES gives products).
+export const DROP_STATUSES = ["draft", "live", "archived"] as const;
+export type DropStatus = (typeof DROP_STATUSES)[number];
 
 // The three states a product moves through. One tuple so the type, the DB check
 // constraint's mirror, and the admin's write zod all read from a single list
@@ -20,12 +24,21 @@ export type DropStatus = "draft" | "live" | "archived";
 export const PRODUCT_STATUSES = ["draft", "live", "hidden"] as const;
 export type ProductStatus = (typeof PRODUCT_STATUSES)[number];
 
-export type ThemeBase = "light" | "dark";
+// Whether a drop's collection sits on a light or dark base, mirrored by the DB
+// check constraint and the admin's write zod from this one tuple.
+export const THEME_BASES = ["light", "dark"] as const;
+export type ThemeBase = (typeof THEME_BASES)[number];
 
 // The fixed set of faces the site ships — an arbitrary name would mean loading
-// a webfont at runtime, so the admin picks from these.
-export type DisplayFont =
-  "Antonio" | "Permanent Marker" | "JetBrains Mono" | "Urbanist";
+// a webfont at runtime, so the admin picks from this list, which the write zod
+// enforces (the DB column has no check constraint of its own).
+export const DISPLAY_FONTS = [
+  "Antonio",
+  "Permanent Marker",
+  "JetBrains Mono",
+  "Urbanist",
+] as const;
+export type DisplayFont = (typeof DISPLAY_FONTS)[number];
 
 export interface Drop {
   id: number;
@@ -217,6 +230,61 @@ export const productSizesInput = z.object({
     ),
 });
 export type ProductSizesInput = z.infer<typeof productSizesInput>;
+
+/* -------------------------------------------------------------- drop writes */
+
+// Field bounds for the admin's drop create/edit form, shared so the form's HTML5
+// hints and the API's validation agree. Generous integrity caps on free text, not
+// the real content check. The slug bound and pattern are the shared ones products
+// use — a drop's URL is a slug on the same terms.
+export const MAX_DROP_NAME_LEN = 200;
+export const MAX_DROP_TAGLINE_LEN = 500;
+export const MAX_DROP_BODY_LEN = 5000;
+export const MAX_DROP_NOTE_LEN = 2000;
+// A collection's year and number are small positive integers; the year is bounded
+// to a sane window so a typo can't store 20260 or a negative.
+export const MIN_DROP_YEAR = 2000;
+export const MAX_DROP_YEAR = 2100;
+
+// A six-digit hex colour like #e11d2a. Case-insensitive; the shop emits it as a
+// CSS custom property verbatim.
+export const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+
+// A drop's colour override: a valid hex, or empty to fall back to the site
+// palette. Not required — a collection that sets no colours simply inherits the
+// site defaults — so an empty string is valid, anything non-empty must be hex.
+const hexColor = z
+  .string()
+  .trim()
+  .refine((v) => v === "" || HEX_COLOR_PATTERN.test(v), {
+    message: "must be a six-digit hex colour like #e11d2a, or empty",
+  })
+  .default("");
+
+// The editable fields of a drop, validated with the same zod the API enforces so
+// the admin form and the endpoint agree. A drop has no parent, so create and edit
+// share one shape (unlike products, whose create names a drop). Colours and the
+// display font are the theming the shop reads off the drop row; theme_base and
+// display_font come from fixed lists so the shop never loads an arbitrary webfont
+// or an unknown base.
+export const dropInput = z.object({
+  slug: z.string().trim().min(1).max(MAX_SLUG_LEN).regex(SLUG_PATTERN),
+  name: z.string().trim().min(1).max(MAX_DROP_NAME_LEN),
+  year: z.number().int().min(MIN_DROP_YEAR).max(MAX_DROP_YEAR),
+  no: z.number().int().min(0),
+  status: z.enum(DROP_STATUSES),
+  sort: z.number().int().min(0).default(0),
+  tagline: z.string().max(MAX_DROP_TAGLINE_LEN).default(""),
+  body: z.string().max(MAX_DROP_BODY_LEN).default(""),
+  note: z.string().max(MAX_DROP_NOTE_LEN).default(""),
+  color_primary: hexColor,
+  color_secondary: hexColor,
+  color_accent: hexColor,
+  color_text: hexColor,
+  display_font: z.enum(DISPLAY_FONTS),
+  theme_base: z.enum(THEME_BASES),
+});
+export type DropInput = z.infer<typeof dropInput>;
 
 /* ------------------------------------------------------------------ orders */
 

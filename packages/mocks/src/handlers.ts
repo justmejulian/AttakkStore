@@ -1,4 +1,5 @@
 import {
+  dropInput,
   loginInput,
   ORDER_STATUSES,
   orderInput,
@@ -70,6 +71,16 @@ const dropsBySlug = new Map(allDrops.map((d) => [d.slug, d] as const));
 // Every drop by id, for the admin's edit-form read. The bare rows (adminDrops)
 // are already the products-stripped Drop shape the detail returns.
 const dropsById = new Map(adminDrops.map((d) => [d.id, d] as const));
+
+// The slugs already in use, the one thing the drop create/edit handlers check —
+// mirroring the API's slug-unique guard. The mock is stateless, so this is the
+// seeded fixtures.
+const dropSlugs = new Set(adminDrops.map((d) => d.slug));
+
+// The id a created drop comes back with. The API assigns the next rowid; the mock
+// is stateless, so it returns this fixed, obviously-synthetic id, distinct from
+// any seeded drop's (and from the product and size synthetics below).
+const MOCK_NEW_DROP_ID = 800;
 const productsBySlug = new Map(
   allDrops.flatMap((d) => d.products).map((p) => [p.slug, p] as const),
 );
@@ -133,6 +144,23 @@ export const handlers = [
   // collections. The real API distinguishes the literal prefixes.
   http.get("*/admin/drops", () => HttpResponse.json(adminDrops)),
 
+  // Create a drop. The real zod does the shape check, so a bad body is a 400; then
+  // a slug already in use is a 409, the same codes the API gives. On success a
+  // synthesized row (fresh id) comes back 201.
+  http.post("*/admin/drops", async ({ request }) => {
+    const parsed = dropInput.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) {
+      return HttpResponse.json({ error: "invalid" }, { status: 400 });
+    }
+    if (dropSlugs.has(parsed.data.slug)) {
+      return HttpResponse.json({ error: "slug_taken" }, { status: 409 });
+    }
+    return HttpResponse.json(
+      { id: MOCK_NEW_DROP_ID, ...parsed.data },
+      { status: 201 },
+    );
+  }),
+
   // The admin's drop detail, keyed off the fixtures by id. Registered before
   // */drops/:slug for the same *-wildcard reason as the list: without it,
   // /admin/drops/1 would match */drops/:slug (slug "1") and 404.
@@ -141,6 +169,26 @@ export const handlers = [
     return drop
       ? HttpResponse.json(drop)
       : HttpResponse.json({ error: "not_found" }, { status: 404 });
+  }),
+
+  // Edit a drop. A missing drop is a 404, a bad body a 400, a slug taken by a
+  // DIFFERENT drop a 409 — re-saving a drop with its own slug is fine.
+  http.patch("*/admin/drops/:id", async ({ params, request }) => {
+    const drop = dropsById.get(Number(params.id));
+    if (!drop) {
+      return HttpResponse.json({ error: "not_found" }, { status: 404 });
+    }
+    const parsed = dropInput.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) {
+      return HttpResponse.json({ error: "invalid" }, { status: 400 });
+    }
+    const clash = [...dropsById.values()].some(
+      (d) => d.id !== drop.id && d.slug === parsed.data.slug,
+    );
+    if (clash) {
+      return HttpResponse.json({ error: "slug_taken" }, { status: 409 });
+    }
+    return HttpResponse.json({ ...drop, ...parsed.data });
   }),
 
   http.get("*/drops", () => HttpResponse.json(liveDrops)),
