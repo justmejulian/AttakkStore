@@ -1,0 +1,264 @@
+---
+/**
+ * DropSection — one collection. Everything visual about a drop is data: the
+ * theme_base picks the light or dark surface it sits on, and its four colours
+ * and display font are emitted as custom properties on this element, so the
+ * eyebrow, the marker, the buttons and the cards inside all read the drop's
+ * palette without a per-drop stylesheet. A blank colour falls through to the
+ * site default rather than overriding it.
+ *
+ * The display font sets the collection-name (marker) face only; the numbers and
+ * headings keep the site display face, so the structure reads the same across
+ * drops while the name carries the drop's chosen face.
+ */
+import type { DisplayFont, DropWithProducts } from "@attakk/types";
+import Heading from "@/components/Typography/Heading.astro";
+import ProductCard from "./ProductCard.astro";
+import ViewAllCard from "./ViewAllCard.astro";
+
+interface Props {
+  drop: DropWithProducts;
+  /** Set to `false` to skip rendering. */
+  render?: boolean;
+  class?: string;
+}
+
+const { drop, render = true, class: className } = Astro.props;
+
+// The self-hosted face each display-font choice maps to (astro.config.mjs's
+// cssVariables). The marker family becomes this for the collection name.
+const FONT_VARS: Record<DisplayFont, string> = {
+  Antonio: "var(--font-antonio)",
+  "Permanent Marker": "var(--font-permanent-marker)",
+  "JetBrains Mono": "var(--font-jetbrains-mono)",
+  Urbanist: "var(--font-urbanist)",
+};
+
+// Each drop colour maps onto the Lumos property that carries it, emitted only
+// when the drop actually set one — a blank value leaves the theme default in
+// place. color_primary is the signature colour buttons take; color_accent is the
+// marker and heading pop; color_secondary tints the raised card surface;
+// color_text is the ink.
+const vars: Record<string, string> = {
+  "--marker-family": FONT_VARS[drop.display_font],
+};
+if (drop.color_primary) vars["--brand-500"] = drop.color_primary;
+if (drop.color_accent) vars["--heading-accent"] = drop.color_accent;
+if (drop.color_secondary) vars["--background-2"] = drop.color_secondary;
+if (drop.color_text) vars["--text"] = drop.color_text;
+const style = Object.entries(vars)
+  .map(([k, v]) => `${k}:${v}`)
+  .join(";");
+
+// The silhouette fill for pieces with no photo yet: the drop's own colour, or
+// the ink when it set none.
+const swatch = drop.color_primary || "var(--text)";
+
+const no = String(drop.no).padStart(2, "0");
+const yearShort = String(drop.year).slice(2);
+const statusLabel = drop.status.charAt(0).toUpperCase() + drop.status.slice(1);
+const count = drop.products.length;
+---
+
+{
+  render && (
+    <section
+      class:list={["drop", `theme-${drop.theme_base}`, className]}
+      style={style}
+      data-drop={drop.slug}
+    >
+      <div class="drop_spine">
+        <div class="drop_spine_inner">
+          <span>N° {no}</span>
+          <span>
+            {drop.name} {drop.year}
+          </span>
+          <span>{statusLabel}</span>
+        </div>
+      </div>
+
+      <div class="container">
+        <div class="drop_grid">
+          <div class="drop_intro">
+            <p class="drop_eyebrow">
+              <span class="drop_number">{no}</span>
+              <span class="drop_status">{statusLabel}</span>
+            </p>
+
+            <p class="drop_marker">
+              {drop.name}
+              <span class="drop_marker-year">'{yearShort}</span>
+            </p>
+
+            {drop.tagline && (
+              <Heading tag="h2" variant="h3" class="drop_tagline margin-top-0">
+                {drop.tagline}
+              </Heading>
+            )}
+            {drop.body && <p class="drop_body">{drop.body}</p>}
+            {drop.note && <p class="drop_note">↳ {drop.note}</p>}
+          </div>
+
+          <div class="drop_products">
+            <div class="product-rail">
+              {drop.products.map((product, i) => (
+                <ProductCard
+                  product={product}
+                  index={i + 1}
+                  count={count}
+                  swatch={swatch}
+                />
+              ))}
+              <ViewAllCard drop={drop} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+<style>
+  @layer components {
+    /* The drop paints itself from the theme its class sets; the inline colour
+       overrides ride on top. Not the .section class, so its full-bleed
+       background rule does not catch the spine. */
+    .drop {
+      padding-block: var(--section-space-small);
+      background-color: var(--background);
+      color: var(--text);
+    }
+
+    /* A thin full-bleed rule above each collection, its inner content centred to
+       the site width the container uses. */
+    .drop_spine {
+      padding-block: var(--space-3);
+      margin-bottom: var(--space-7);
+      background-color: color-mix(in srgb, var(--text) 5%, transparent);
+      border-bottom: var(--border-width) solid
+        color-mix(in srgb, var(--text) 22%, transparent);
+      font-family: var(--label-family);
+      font-size: 0.625rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .drop_spine_inner {
+      width: var(--site-width);
+      max-width: var(--max-width-main);
+      margin-inline: auto;
+      display: flex;
+      flex-flow: row wrap;
+      justify-content: space-between;
+      gap: var(--space-1) var(--space-4);
+    }
+
+    /* The two-column collection: a narrow intro beside a wider product area,
+       stacking under the drop breakpoint. */
+    .drop_grid {
+      display: grid;
+      grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.6fr);
+      gap: var(--space-8);
+    }
+
+    @media (width < 64rem) {
+      .drop_grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--space-6);
+      }
+    }
+
+    .drop_intro {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+      max-inline-size: 34rem;
+    }
+
+    .drop_eyebrow {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      margin: 0;
+    }
+
+    .drop_number {
+      font-family: var(--display-family);
+      font-weight: var(--primary-bold);
+      font-size: clamp(2.75rem, 2.3rem + 2.25vw, 4rem);
+      line-height: 0.8;
+      color: var(--heading-accent);
+    }
+
+    .drop_status {
+      padding: 0.25rem 0.5rem;
+      border: var(--border-width) solid currentColor;
+      border-radius: var(--radius-round);
+      font-family: var(--label-family);
+      font-size: 0.625rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    /* The collection name, in the drop's marker face, tilted like a scrawl. */
+    .drop_marker {
+      display: inline-block;
+      margin-top: calc(var(--space-2) * -1);
+      white-space: nowrap;
+      font-family: var(--marker-family);
+      font-weight: 400;
+      font-size: clamp(3.5rem, 2.2rem + 6.5vw, 8rem);
+      line-height: 0.9;
+      letter-spacing: 0.02em;
+      color: var(--heading-accent);
+      transform: rotate(-2deg);
+      transform-origin: left center;
+    }
+
+    .drop_marker-year {
+      display: inline-block;
+      margin-left: 0.3em;
+      font-family: var(--display-family);
+      font-size: 0.42em;
+      font-weight: var(--primary-bold);
+      letter-spacing: 0.06em;
+      color: var(--text);
+      vertical-align: top;
+      transform: rotate(2deg);
+    }
+
+    .drop_body {
+      margin: 0;
+      font-size: var(--text-small);
+      color: var(--text-2);
+    }
+
+    .drop_note {
+      margin: 0;
+      font-family: var(--label-family);
+      font-size: var(--label);
+      letter-spacing: var(--label-letter-spacing);
+      color: var(--text-2);
+    }
+
+    /* Four across on a wide page; a horizontal scroller when the column is
+       narrow, each card snapping into place. */
+    .product-rail {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: var(--space-3);
+      align-items: stretch;
+    }
+
+    @media (width < 64rem) {
+      .product-rail {
+        display: flex;
+        overflow: auto clip;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: var(--space-3);
+        margin-right: calc(var(--site-margin) * -1);
+      }
+    }
+  }
+</style>

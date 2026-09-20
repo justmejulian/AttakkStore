@@ -1,0 +1,64 @@
+---
+/**
+ * ProductGraphic — the garment silhouette that stands in until a product's
+ * photography lands, so a piece with no photo still renders as something
+ * deliberate rather than an empty box. It carries no colours of its own: fill
+ * and stroke are set by whatever `.product-card_figure` resolves to, so one CSS
+ * rule recolours every garment on the site.
+ *
+ * The data model has no per-product figure, so `jersey` is the default and the
+ * only one a card asks for today. The others are kept for when the catalogue
+ * grows a garment type, or a bespoke page wants one by hand.
+ */
+type Figure = "jersey" | "bib" | "sock" | "tank";
+
+interface Props {
+  /** Which silhouette to draw. Defaults to the jersey. */
+  figure?: Figure;
+  /** Set to `false` to skip rendering. */
+  render?: boolean;
+  class?: string;
+}
+
+const {
+  figure = "jersey",
+  render = true,
+  class: className = "product-card_figure",
+} = Astro.props;
+
+// Each path is the outline plus its interior seams, drawn on a 200×240 canvas.
+const paths: Record<Figure, string> = {
+  jersey:
+    '<path d="M40 40 L70 30 Q100 50 130 30 L160 40 L175 80 L150 90 L150 200 L50 200 L50 90 L25 80 Z" /><path d="M50 90 H150 M50 176 H150" fill="none" /><path d="M70 30 Q100 50 130 30" fill="none" />',
+  bib: '<path d="M55 30 L75 60 L75 200 L60 230 L100 230 L100 60 Z" /><path d="M145 30 L125 60 L125 200 L140 230 L100 230 L100 60 Z" /><path d="M100 60 V230" fill="none" />',
+  sock: '<path d="M62 34 H92 V162 L112 182 H72 L52 162 Z" /><path d="M118 34 H148 V162 L168 182 H128 L108 162 Z" /><path d="M62 56 H92 M62 68 H92 M118 56 H148 M118 68 H148" fill="none" stroke-width="7" />',
+  tank: '<path d="M55 40 L80 30 L80 60 Q100 72 120 60 L120 30 L145 40 L160 200 L40 200 Z" /><path d="M40 176 H160" fill="none" /><path d="M80 60 Q100 72 120 60" fill="none" />',
+};
+---
+
+{
+  render && (
+    <svg
+      class={className}
+      viewBox="0 0 200 240"
+      aria-hidden="true"
+      set:html={paths[figure]}
+    />
+  )
+}
+
+<style>
+  @layer components {
+    /* The silhouette carries no colour of its own: it fills with --_swatch (the
+       drop's colour, inherited from the card) and strokes in the surface behind
+       it, so one value recolours every garment. */
+    .product-card_figure {
+      width: 100%;
+      height: 100%;
+      fill: var(--_swatch, var(--text));
+      stroke: var(--background);
+      stroke-width: 2.5;
+      stroke-linejoin: round;
+    }
+  }
+</style>

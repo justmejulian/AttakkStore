@@ -1,0 +1,172 @@
+---
+/**
+ * ViewAllCard — closes every product rail with a link to the full collection.
+ * It takes the same frame as a product card so a rail reads as one row, but
+ * dashed and transparent, filling with the drop's accent on hover — reading that
+ * accent from the theme rather than a per-drop variant. Its styles are its own
+ * (scoped), so it never depends on another component being on the page.
+ */
+import type { DropWithProducts } from "@attakk/types";
+import Heading from "@/components/Typography/Heading.astro";
+
+interface Props {
+  drop: DropWithProducts;
+  /** Set to `false` to skip rendering. */
+  render?: boolean;
+}
+
+const { drop, render = true } = Astro.props;
+const count = drop.products.length;
+const countLabel = String(count).padStart(2, "0");
+---
+
+{
+  render && (
+    <a class="viewall-card" href={`/drops/${drop.slug}`}>
+      <span class="viewall-card_index">→ All</span>
+
+      <div class="viewall-card_media">
+        <span class="viewall-card_arrow" aria-hidden="true">
+          →
+        </span>
+        <span class="viewall-card_count">
+          <b>{countLabel}</b> {count === 1 ? "piece" : "pieces"}
+        </span>
+      </div>
+
+      <div class="viewall-card_body">
+        <div class="viewall-card_head">
+          <Heading tag="h3" variant="h5" class="margin-top-0">
+            View all
+          </Heading>
+          <span class="viewall-card_shop">Shop →</span>
+        </div>
+        <p class="viewall-card_meta">
+          {drop.name} {drop.year} · full collection
+        </p>
+      </div>
+    </a>
+  )
+}
+
+<style>
+  @layer components {
+    /* The card's frame, dashed and transparent, filling with the drop's accent
+       on hover. Same shape as a product card so the rail reads as one row. */
+    .viewall-card {
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      color: var(--text);
+      text-decoration: none;
+      background-color: transparent;
+      border: var(--border-width) dashed var(--border);
+      border-radius: var(--radius-main);
+      transition:
+        transform var(--hover-duration) var(--hover-ease),
+        border-color var(--hover-duration) var(--hover-ease),
+        background-color var(--hover-duration) var(--hover-ease);
+    }
+
+    @media (hover: hover) {
+      .viewall-card:hover {
+        border-style: solid;
+        border-color: var(--heading-accent);
+        background-color: var(--heading-accent);
+        color: var(--brand-text);
+      }
+    }
+
+    /* On a narrow column the rail scrolls sideways, so the card takes a fixed
+       width and snaps into place, matching the product cards beside it. */
+    @media (width < 64rem) {
+      .viewall-card {
+        flex: 0 0 13.5rem;
+        scroll-snap-align: start;
+      }
+    }
+
+    .viewall-card_index {
+      position: absolute;
+      top: var(--space-2);
+      right: var(--space-2);
+      z-index: 2;
+      font-family: var(--label-family);
+      font-size: 0.625rem;
+      letter-spacing: 0.1em;
+      color: var(--text-2);
+    }
+
+    /* The same 1:1.05 frame the product photo sits in, here holding the arrow and
+       the piece count stacked. */
+    .viewall-card_media {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-3);
+      overflow: hidden;
+      aspect-ratio: 1 / 1.05;
+      padding: var(--space-4);
+      background-color: color-mix(in srgb, var(--text) 5%, transparent);
+    }
+
+    .viewall-card_arrow {
+      font-family: var(--display-family);
+      font-size: clamp(4rem, 3rem + 5vw, 6rem);
+      line-height: 1;
+      letter-spacing: -0.06em;
+      transition: transform var(--hover-duration) var(--hover-ease);
+    }
+
+    @media (hover: hover) {
+      .viewall-card:hover .viewall-card_arrow {
+        transform: translateX(0.5rem);
+      }
+    }
+
+    .viewall-card_count {
+      font-family: var(--label-family);
+      font-size: var(--label);
+      letter-spacing: var(--label-letter-spacing);
+      color: var(--text-2);
+    }
+
+    .viewall-card_count b {
+      font-family: var(--display-family);
+      font-size: 1.5rem;
+      letter-spacing: 0;
+    }
+
+    .viewall-card_body {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      padding: var(--space-3);
+    }
+
+    .viewall-card_head {
+      display: flex;
+      flex-wrap: nowrap;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: var(--space-2);
+    }
+
+    .viewall-card_shop {
+      font-family: var(--label-family);
+      font-size: var(--label);
+      letter-spacing: var(--label-letter-spacing);
+    }
+
+    .viewall-card_meta {
+      margin: 0;
+      font-family: var(--label-family);
+      font-size: 0.625rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-2);
+    }
+  }
+</style>

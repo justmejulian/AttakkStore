@@ -1,0 +1,231 @@
+---
+/**
+ * ProductCard — one piece in a drop's rail. The whole card is the link to the
+ * product page, where sizes are chosen and the piece is added to the cart; the
+ * card itself is presentation only, so it carries no interactive control that
+ * would do nothing here. It takes the drop's swatch for the silhouette fallback
+ * and reads every colour from the theme around it, so nothing is styled per drop.
+ */
+import type { ProductWithSizes } from "@attakk/types";
+import Heading from "@/components/Typography/Heading.astro";
+import ProductGraphic from "./ProductGraphic.astro";
+import { formatFrancs, imageSrc, imageSrcset } from "@/lib/format.ts";
+
+interface Props {
+  product: ProductWithSizes;
+  /** Position of this piece within the drop, 1-based, for the "01 / 05" index. */
+  index: number;
+  /** How many pieces the drop has, for the second half of the index. */
+  count: number;
+  /** The drop's colour, filling the silhouette when a piece has no photo yet. */
+  swatch?: string;
+  /** Set to `false` to skip rendering. */
+  render?: boolean;
+  class?: string;
+}
+
+const {
+  product,
+  index,
+  count,
+  swatch = "var(--text)",
+  render = true,
+  class: className,
+} = Astro.props;
+
+const position = `${String(index).padStart(2, "0")} / ${String(count).padStart(2, "0")}`;
+
+// The lead image is the first of the sorted set; an empty set is a piece with no
+// photo yet, which falls back to the silhouette.
+const lead = product.images[0];
+---
+
+{
+  render && (
+    <a
+      class:list={["product-card", className]}
+      href={`/products/${product.slug}`}
+      style={`--_swatch:${swatch}`}
+    >
+      <span class="product-card_index">{position}</span>
+
+      <div class="product-card_media">
+        {lead ? (
+          <img
+            class="product-card_photo"
+            src={imageSrc(lead)}
+            srcset={imageSrcset(lead)}
+            sizes="(max-width: 48rem) 60vw, 14rem"
+            width={lead.width}
+            height={lead.height}
+            alt={lead.alt}
+            loading="lazy"
+            decoding="async"
+            style={`background-image:url(${JSON.stringify(lead.placeholder)})`}
+          />
+        ) : (
+          <ProductGraphic />
+        )}
+      </div>
+
+      <div class="product-card_body">
+        <div class="product-card_head">
+          <Heading tag="h3" variant="h5" class="margin-top-0">
+            {product.name}
+          </Heading>
+          <span class="product-card_price">
+            {formatFrancs(product.price_rappen)}
+            <span class="product-card_currency">CHF</span>
+          </span>
+        </div>
+
+        {product.fit && <p class="product-card_fit">{product.fit}</p>}
+
+        {product.sizes.length > 0 && (
+          <ul class="product-card_sizes" aria-label="Available sizes">
+            {product.sizes.map((size) => (
+              <li class="size-pill">{size.label}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </a>
+  )
+}
+
+<style>
+  @layer components {
+    /* The card reads every colour from the theme around it; --_swatch (the
+       silhouette fill) is the one value a drop passes in. */
+    .product-card {
+      --_swatch: var(--text);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      color: var(--text);
+      text-decoration: none;
+      background-color: color-mix(
+        in srgb,
+        var(--background-2) 70%,
+        transparent
+      );
+      border: var(--border-width) solid var(--border);
+      border-radius: var(--radius-main);
+      transition:
+        transform var(--hover-duration) var(--hover-ease),
+        border-color var(--hover-duration) var(--hover-ease);
+    }
+
+    @media (hover: hover) {
+      .product-card:hover {
+        transform: translateY(-0.1875rem);
+        border-color: var(--heading-accent);
+      }
+    }
+
+    /* On a narrow column the rail scrolls sideways, so each card takes a fixed
+       width and snaps into place. In the wide grid these are ignored. */
+    @media (width < 64rem) {
+      .product-card {
+        flex: 0 0 13.5rem;
+        scroll-snap-align: start;
+      }
+    }
+
+    .product-card_index {
+      position: absolute;
+      top: var(--space-2);
+      right: var(--space-2);
+      z-index: 2;
+      font-family: var(--label-family);
+      font-size: 0.625rem;
+      letter-spacing: 0.1em;
+      color: var(--text-2);
+    }
+
+    /* A tall product frame, 1:1.05, holding either the photo or the silhouette
+       centred on a faint tint of the ink. */
+    .product-card_media {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      aspect-ratio: 1 / 1.05;
+      padding: var(--space-4);
+      background-color: color-mix(in srgb, var(--text) 5%, transparent);
+    }
+
+    /* The photo fills the frame; its blurred placeholder paints underneath as a
+       background while the file loads. */
+    .product-card_photo {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      background-size: cover;
+      background-position: center;
+    }
+
+    .product-card_body {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      padding: var(--space-3);
+    }
+
+    .product-card_head {
+      display: flex;
+      flex-wrap: nowrap;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: var(--space-2);
+    }
+
+    .product-card_price {
+      font-family: var(--mono-family);
+      font-weight: var(--primary-medium);
+      font-size: var(--text-small);
+      white-space: nowrap;
+    }
+
+    .product-card_currency {
+      font-size: 0.625rem;
+      color: var(--text-2);
+      margin-left: 0.15em;
+    }
+
+    .product-card_fit {
+      margin: 0;
+      font-family: var(--label-family);
+      font-size: 0.625rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-2);
+    }
+
+    /* A read-only preview of the sizes a piece comes in. Choosing one happens on
+       the product page, so these are labels, not controls. */
+    .product-card_sizes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .size-pill {
+      min-width: 1.875rem;
+      padding: 0.25rem 0.5rem;
+      text-align: center;
+      border: var(--border-width) solid currentColor;
+      border-radius: var(--radius-small);
+      font-family: var(--label-family);
+      font-size: 0.625rem;
+      letter-spacing: 0.08em;
+      color: var(--text-2);
+    }
+  }
+</style>

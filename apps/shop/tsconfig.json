@@ -3,6 +3,11 @@
   "include": [".astro/types.d.ts", "**/*"],
   "exclude": ["dist"],
   "compilerOptions": {
+    // Resolve @attakk/types to its TypeScript source, so `check` and dev
+    // type-check against the live source with no build step — the same
+    // condition the api and admin tsconfigs use. The production build resolves
+    // it through the package's default export (dist) instead.
+    "customConditions": ["source"],
     "paths": {
       "@/*": ["./src/*"]
     }

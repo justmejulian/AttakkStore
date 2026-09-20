@@ -118,6 +118,9 @@ importers:
       '@astrojs/sitemap':
         specifier: ^3.7.3
         version: 3.7.4
+      '@attakk/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       astro:
         specifier: ^7.2.9
         version: 7.3.3(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@26.6.2)(@vitejs/devtools@0.7.5(@devframes/json-render@1.0.0(@devframes/hub@1.0.0(@devframes/agentic@1.0.0)(crossws@0.4.12(srvx@1.0.5))(devframe@1.0.0))(devframe@1.0.0))(@vitejs/devtools-oxc@0.7.5)(crossws@0.4.12(srvx@1.0.5))(srvx@1.0.5)(vite@8.3.0))(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.1)

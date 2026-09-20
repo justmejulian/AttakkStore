@@ -21,6 +21,7 @@
     "@astrojs/check": "^0.9.10",
     "@astrojs/node": "^11.1.6",
     "@astrojs/sitemap": "^3.7.3",
+    "@attakk/types": "workspace:*",
     "astro": "^7.2.9",
     "sharp": "^0.35.4",
     "typescript": "^6.0.3"
