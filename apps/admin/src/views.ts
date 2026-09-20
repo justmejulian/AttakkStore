@@ -1085,7 +1085,9 @@ export function settingsPage(opts: {
             />
             Shop open — accepting orders
           </label>
-          <small>Unchecked shows the Drop Over page and refuses new orders.</small>
+          <small
+            >Unchecked shows the Drop Over page and refuses new orders.</small
+          >
         </p>
 
         <h2>Creditor</h2>
@@ -1175,7 +1177,11 @@ function userRow(u: AdminUser): Html {
     <td>${u.last_login_at ? formatTimestamp(u.last_login_at) : "never"}</td>
     <td>
       <form method="post" action="/users/${u.id}/active">
-        <input type="hidden" name="active" value="${active ? "false" : "true"}" />
+        <input
+          type="hidden"
+          name="active"
+          value="${active ? "false" : "true"}"
+        />
         <button type="submit">${active ? "Deactivate" : "Restore"}</button>
       </form>
     </td>

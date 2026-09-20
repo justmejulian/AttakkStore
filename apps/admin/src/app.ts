@@ -1097,7 +1097,8 @@ function settingsValues(s: Settings): SettingsFormValues {
 // The shared zod's refine codes as a message beside the field. A blank value is
 // always accepted, so these only ever fire on a non-blank one that is wrong.
 const SETTINGS_ERROR_MESSAGES: Record<string, string> = {
-  invalid_iban: "That IBAN is not valid — check for a typo, and note a QR-IBAN is not accepted.",
+  invalid_iban:
+    "That IBAN is not valid — check for a typo, and note a QR-IBAN is not accepted.",
   invalid_email: "Enter a valid email address, or leave it blank.",
   invalid_country: "The country must be CH, or blank.",
 };

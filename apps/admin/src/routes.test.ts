@@ -714,7 +714,10 @@ test("GET /settings renders the form with the stored values", async () => {
   const body = await res.text();
   assert.match(body, /<form method="post" action="\/settings">/);
   // Shop open is checked and the stored creditor fields are echoed in.
-  assert.match(body, /name="shop_open"[^>]*checked|checked[^>]*name="shop_open"/);
+  assert.match(
+    body,
+    /name="shop_open"[^>]*checked|checked[^>]*name="shop_open"/,
+  );
   assert.match(body, new RegExp(`value="${settings.creditor_account}"`));
   assert.match(body, new RegExp(`value="${settings.notify_email}"`));
 });
