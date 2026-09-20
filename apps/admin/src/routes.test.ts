@@ -394,3 +394,85 @@ test("POST sizes with duplicate labels is a 400 before the API is called", async
   assert.equal(res.status, 400);
   assert.match(await res.text(), /unique/);
 });
+
+test("the products list links to the new-product form", async () => {
+  const res = await get("/products", await authed());
+  assert.match(await res.text(), /href="\/products\/new"/);
+});
+
+test("GET /products/new renders the form with a drop to pick", async () => {
+  const res = await get("/products/new", await authed());
+  assert.equal(res.status, 200);
+  const body = await res.text();
+  assert.match(body, /action="\/products"/);
+  assert.match(body, /name="drop_id"/);
+  // The seeded drops are offered as options.
+  assert.match(body, /Redline/);
+});
+
+// A well-formed create body into the live drop (1) with a fresh slug.
+const newProductFields = {
+  drop_id: "1",
+  slug: "fresh-piece",
+  name: "Fresh Piece",
+  description: "",
+  price_rappen: "4200",
+  fit: "",
+  fit_url: "",
+  min_orders: "1",
+  status: "draft",
+  sort: "0",
+};
+
+test("POST /products creates and lands on the new product's edit page", async () => {
+  const res = await form("/products", await authed(), newProductFields);
+  assert.equal(res.status, 302);
+  // The mock returns id 900 for a created product.
+  assert.equal(res.headers.get("location"), "/products/900?saved=1");
+});
+
+test("POST /products keeps the slug error on a clash", async () => {
+  const res = await form("/products", await authed(), {
+    ...newProductFields,
+    slug: "redline-jersey", // product 10 owns it
+  });
+  assert.equal(res.status, 409);
+  const body = await res.text();
+  assert.match(body, /already in use/);
+  assert.match(body, /value="redline-jersey"/);
+});
+
+test("POST /products is a 422 with a drop error when the drop is unknown", async () => {
+  const res = await form("/products", await authed(), {
+    ...newProductFields,
+    drop_id: "999",
+  });
+  assert.equal(res.status, 422);
+  assert.match(await res.text(), /no longer exists/);
+});
+
+test("POST /products is a 400 with values kept when the form is invalid", async () => {
+  const res = await form("/products", await authed(), {
+    ...newProductFields,
+    name: "",
+  });
+  assert.equal(res.status, 400);
+  assert.match(await res.text(), /action="\/products"/);
+});
+
+test("POST /products/:id/delete removes an order-free product and returns to the list", async () => {
+  // Product 12 (origins-tee) has no orders in the fixtures.
+  const res = await form("/products/12/delete", await authed(), {});
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get("location"), "/products?deleted=1");
+});
+
+test("POST /products/:id/delete on an ordered product is refused with a hide hint", async () => {
+  const res = await form(
+    `/products/${jerseyProduct.id}/delete`,
+    await authed(),
+    {},
+  );
+  assert.equal(res.status, 409);
+  assert.match(await res.text(), /hidden instead/);
+});

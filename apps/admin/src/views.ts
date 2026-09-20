@@ -1,5 +1,6 @@
 import {
   type AdminProductRow,
+  type Drop,
   MAX_FIT_LEN,
   MAX_FIT_URL_LEN,
   MAX_PRODUCT_DESCRIPTION_LEN,
@@ -343,11 +344,14 @@ function byDrop(
 export function productsPage(opts: {
   user: Session;
   products: AdminProductRow[];
+  flash?: string;
 }) {
   return shell(
     "Products",
     opts.user,
     html`<h1>Products</h1>
+      ${opts.flash ? html`<p role="status">${opts.flash}</p>` : ""}
+      <p><a href="/products/new">New product</a></p>
       ${
         opts.products.length === 0
           ? html`<p>No products yet.</p>`
@@ -490,11 +494,153 @@ function sizesForm(opts: {
     </form>`;
 }
 
+// The product fields shared by the edit and create forms — everything but the
+// drop (create-only) and the sizes (their own editor). The caller wraps this in
+// its own <form>; the price hint differs (a saved value on edit, generic on
+// create), so it is passed in.
+function productFieldset(opts: {
+  values: ProductFormValues;
+  errors?: Partial<Record<keyof ProductFormValues, string>>;
+  priceHint: string;
+}): Html {
+  const { values, errors } = opts;
+  return html`${textField({
+      label: "Slug",
+      name: "slug",
+      values,
+      errors,
+      required: true,
+      maxlength: MAX_SLUG_LEN,
+      hint: "Lowercase words joined by hyphens — the storefront URL.",
+    })}
+    ${textField({
+      label: "Name",
+      name: "name",
+      values,
+      errors,
+      required: true,
+      maxlength: MAX_PRODUCT_NAME_LEN,
+    })}
+    <p>
+      <label
+        >Description
+        <textarea
+          name="description"
+          rows="4"
+          maxlength="${MAX_PRODUCT_DESCRIPTION_LEN}"
+        >
+${values.description}</textarea>
+      </label>
+    </p>
+    ${textField({
+      label: "Price (rappen)",
+      name: "price_rappen",
+      values,
+      errors,
+      type: "number",
+      required: true,
+      min: 0,
+      hint: opts.priceHint,
+    })}
+    ${textField({
+      label: "Fit",
+      name: "fit",
+      values,
+      errors,
+      maxlength: MAX_FIT_LEN,
+    })}
+    ${textField({
+      label: "Fit guide URL",
+      name: "fit_url",
+      values,
+      errors,
+      maxlength: MAX_FIT_URL_LEN,
+    })}
+    ${textField({
+      label: "Order target",
+      name: "min_orders",
+      values,
+      errors,
+      type: "number",
+      required: true,
+      min: 1,
+    })}
+    <p>
+      <label
+        >Status
+        <select name="status">
+          ${PRODUCT_STATUSES.map(
+            (s) =>
+              html`<option
+                value="${s}"
+                ${values.status === s ? html`selected` : html``}
+              >
+                ${s}
+              </option>`,
+          )}
+        </select></label
+      >
+    </p>
+    ${textField({
+      label: "Sort",
+      name: "sort",
+      values,
+      errors,
+      type: "number",
+      min: 0,
+    })}`;
+}
+
+// The new-product form: a drop to create into (every drop, any status) plus the
+// shared fields. Sizes and images are added on the edit page once the product
+// exists. `errors` marks a rejected field; `dropError` a bad or missing drop.
+export function productNewPage(opts: {
+  user: Session;
+  drops: Drop[];
+  values: ProductFormValues;
+  dropId: string;
+  errors?: Partial<Record<keyof ProductFormValues, string>>;
+  dropError?: string;
+}) {
+  return shell(
+    "New product",
+    opts.user,
+    html`<p><a href="/products">← All products</a></p>
+      <h1>New product</h1>
+      <form method="post" action="/products">
+        <p>
+          <label
+            >Drop
+            <select name="drop_id">
+              ${opts.drops.map(
+                (d) =>
+                  html`<option
+                    value="${d.id}"
+                    ${opts.dropId === String(d.id) ? html`selected` : html``}
+                  >
+                    ${d.name} (${d.status})
+                  </option>`,
+              )}
+            </select></label
+          >
+          ${opts.dropError ? html`<span role="alert">${opts.dropError}</span>` : ""}
+        </p>
+        ${productFieldset({
+          values: opts.values,
+          errors: opts.errors,
+          priceHint: "100 rappen = CHF 1.00 — the price customers pay.",
+        })}
+        <button type="submit">Create product</button>
+      </form>`,
+  );
+}
+
 // The product edit page: two independent forms — the fields (with the current
-// values and a franc price hint) and the size editor. `errors` marks a field the
-// fields form rejected; `sizeState` supplies the size rows (submitted values on a
-// size reject, stored otherwise) and `sizesError` its message; `flash` confirms a
-// save. Images land in the next step.
+// values and a franc price hint) and the size editor — plus the delete control.
+// `errors` marks a field the fields form rejected; `sizeState` supplies the size
+// rows (submitted values on a size reject, stored otherwise) and `sizesError` its
+// message; `deleteError` shows when a delete was refused; `flash` confirms a save.
+// Images land in the next step.
 export function productEditPage(opts: {
   user: Session;
   product: ProductWithSizes;
@@ -502,6 +648,7 @@ export function productEditPage(opts: {
   errors?: Partial<Record<keyof ProductFormValues, string>>;
   sizeState: { existing: SizeRowValues[]; fresh: NewSizeValues[] };
   sizesError?: string;
+  deleteError?: string;
   flash?: string;
 }) {
   const { product, values, errors } = opts;
@@ -513,90 +660,10 @@ export function productEditPage(opts: {
       <h1>${product.name}</h1>
 
       <form method="post" action="/products/${product.id}">
-        ${textField({
-          label: "Slug",
-          name: "slug",
+        ${productFieldset({
           values,
           errors,
-          required: true,
-          maxlength: MAX_SLUG_LEN,
-          hint: "Lowercase words joined by hyphens — the storefront URL.",
-        })}
-        ${textField({
-          label: "Name",
-          name: "name",
-          values,
-          errors,
-          required: true,
-          maxlength: MAX_PRODUCT_NAME_LEN,
-        })}
-        <p>
-          <label
-            >Description
-            <textarea
-              name="description"
-              rows="4"
-              maxlength="${MAX_PRODUCT_DESCRIPTION_LEN}"
-            >
-${values.description}</textarea>
-          </label>
-        </p>
-        ${textField({
-          label: "Price (rappen)",
-          name: "price_rappen",
-          values,
-          errors,
-          type: "number",
-          required: true,
-          min: 0,
-          hint: `100 rappen = CHF 1.00. Saved value: ${chf(product.price_rappen)}.`,
-        })}
-        ${textField({
-          label: "Fit",
-          name: "fit",
-          values,
-          errors,
-          maxlength: MAX_FIT_LEN,
-        })}
-        ${textField({
-          label: "Fit guide URL",
-          name: "fit_url",
-          values,
-          errors,
-          maxlength: MAX_FIT_URL_LEN,
-        })}
-        ${textField({
-          label: "Order target",
-          name: "min_orders",
-          values,
-          errors,
-          type: "number",
-          required: true,
-          min: 1,
-        })}
-        <p>
-          <label
-            >Status
-            <select name="status">
-              ${PRODUCT_STATUSES.map(
-                (s) =>
-                  html`<option
-                    value="${s}"
-                    ${values.status === s ? html`selected` : html``}
-                  >
-                    ${s}
-                  </option>`,
-              )}
-            </select></label
-          >
-        </p>
-        ${textField({
-          label: "Sort",
-          name: "sort",
-          values,
-          errors,
-          type: "number",
-          min: 0,
+          priceHint: `100 rappen = CHF 1.00. Saved value: ${chf(product.price_rappen)}.`,
         })}
         <button type="submit">Save</button>
       </form>
@@ -606,6 +673,16 @@ ${values.description}</textarea>
         existing: opts.sizeState.existing,
         fresh: opts.sizeState.fresh,
         error: opts.sizesError,
-      })}`,
+      })}
+
+      <h2>Delete</h2>
+      ${opts.deleteError ? html`<p role="alert">${opts.deleteError}</p>` : ""}
+      <p>
+        A product with orders can't be deleted — set its status to hidden
+        instead.
+      </p>
+      <form method="post" action="/products/${product.id}/delete">
+        <button type="submit">Delete product</button>
+      </form>`,
   );
 }

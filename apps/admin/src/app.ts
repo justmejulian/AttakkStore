@@ -4,10 +4,12 @@ import {
   ORDER_STATUSES,
   orderNoteInput,
   orderStatusInput,
+  productCreateInput,
   productInput,
   productSizesInput,
   type AdminProductRow,
   type AdminUser,
+  type Drop,
   type OrderListRow,
   type OrderStatus,
   type OrderWithItems,
@@ -27,6 +29,7 @@ import {
   ordersPage,
   productEditPage,
   type ProductFormValues,
+  productNewPage,
   productsPage,
   serviceErrorPage,
   type NewSizeValues,
@@ -348,7 +351,7 @@ function formNum(value: string | File | undefined): unknown {
 
 // The submitted fields as productInput expects them (numbers parsed), for the zod
 // check, and — separately — as strings, to echo back into the form on a reject.
-function productInputFromForm(form: ProductForm): unknown {
+function productInputFromForm(form: ProductForm): Record<string, unknown> {
   return {
     slug: formStr(form.slug),
     name: formStr(form.name),
@@ -362,10 +365,42 @@ function productInputFromForm(form: ProductForm): unknown {
   };
 }
 
+// The create body: the shared fields plus the drop to create into.
+function productCreateInputFromForm(
+  form: ProductForm,
+): Record<string, unknown> {
+  return { ...productInputFromForm(form), drop_id: formNum(form.drop_id) };
+}
+
 function formValues(form: ProductForm): ProductFormValues {
   return Object.fromEntries(
     PRODUCT_FIELDS.map((f) => [f, formStr(form[f])]),
   ) as ProductFormValues;
+}
+
+// A blank set of field values for a fresh create form, with the sensible defaults
+// the schema also carries (a draft, one order, sort 0).
+function blankProductValues(): ProductFormValues {
+  return {
+    slug: "",
+    name: "",
+    description: "",
+    price_rappen: "",
+    fit: "",
+    fit_url: "",
+    min_orders: "1",
+    status: "draft",
+    sort: "0",
+  };
+}
+
+// The drops the create form offers, or the shared error page.
+async function loadDrops(
+  c: Context<AdminEnv>,
+): Promise<{ drops: Drop[] } | { errorPage: Response }> {
+  const r = await apiRequest(c, "/admin/drops");
+  if ("errorPage" in r) return r;
+  return { drops: (await r.res.json()) as Drop[] };
 }
 
 function productValues(product: Product): ProductFormValues {
@@ -414,7 +449,73 @@ app.get("/products", async (c) => {
   const r = await apiRequest(c, "/admin/products");
   if ("errorPage" in r) return r.errorPage;
   const products = (await r.res.json()) as AdminProductRow[];
-  return c.html(productsPage({ user: c.get("user"), products }));
+  const flash = c.req.query("deleted") ? "Product deleted." : undefined;
+  return c.html(productsPage({ user: c.get("user"), products, flash }));
+});
+
+// The new-product form. Registered before /products/:id so "new" is never read as
+// an id (Hono prefers a static segment, but the order makes it plain).
+app.get("/products/new", async (c) => {
+  const d = await loadDrops(c);
+  if ("errorPage" in d) return d.errorPage;
+  return c.html(
+    productNewPage({
+      user: c.get("user"),
+      drops: d.drops,
+      values: blankProductValues(),
+      dropId: d.drops[0] ? String(d.drops[0].id) : "",
+    }),
+  );
+});
+
+// Create a product into a drop. Validated with productCreateInput; a bad body, a
+// slug the API rejects (409) or a missing drop (422) re-render the form with the
+// values kept and the error placed. On success, land on the new product's edit
+// page so its sizes and images can be added.
+app.post("/products", async (c) => {
+  const form = await c.req.parseBody();
+  const parsed = productCreateInput.safeParse(productCreateInputFromForm(form));
+
+  const rerender = async (
+    errors: Partial<Record<keyof ProductFormValues, string>>,
+    dropError: string | undefined,
+    status: 400 | 409 | 422,
+  ): Promise<Response> => {
+    const d = await loadDrops(c);
+    if ("errorPage" in d) return d.errorPage;
+    return c.html(
+      productNewPage({
+        user: c.get("user"),
+        drops: d.drops,
+        values: formValues(form),
+        dropId: formStr(form.drop_id),
+        errors,
+        dropError,
+      }),
+      status,
+    );
+  };
+
+  if (!parsed.success) {
+    const issues = parsed.error.issues;
+    const dropError = issues.find((i) => i.path[0] === "drop_id")?.message;
+    return rerender(fieldErrors(issues), dropError, 400);
+  }
+
+  const w = await apiWrite(c, "/admin/products", jsonBody("POST", parsed.data));
+  if ("errorPage" in w) return w.errorPage;
+  if ("conflict" in w) {
+    if (w.conflict === "drop_not_found") {
+      return rerender({}, "That drop no longer exists.", 422);
+    }
+    return rerender(
+      conflictErrors(w.conflict),
+      undefined,
+      w.conflict === "slug_taken" ? 409 : 400,
+    );
+  }
+  const created = (await w.res.json()) as Product;
+  return c.redirect(`/products/${created.id}?saved=1`);
 });
 
 // How many blank rows the size editor offers for adding new sizes. A saved size
@@ -590,4 +691,33 @@ app.post("/products/:id/sizes", async (c) => {
     );
   }
   return c.redirect(`/products/${id}?saved=1`);
+});
+
+// Delete a product. On success, back to the list with a flash. A product an order
+// references is refused (has_orders) — the API keeps the row so the order history
+// stays intact — so the edit page comes back with a message steering to hiding it.
+app.post("/products/:id/delete", async (c) => {
+  const id = c.req.param("id");
+  const w = await apiWrite(c, productPath(id), { method: "DELETE" });
+  if ("errorPage" in w) return w.errorPage;
+  if ("conflict" in w) {
+    const r = await apiRequest(c, productPath(id));
+    if ("errorPage" in r) return r.errorPage;
+    const product = (await r.res.json()) as ProductWithSizes;
+    const deleteError =
+      w.conflict === "has_orders"
+        ? "This product has orders and can't be deleted. Set its status to hidden instead."
+        : `The delete was refused (${w.conflict}).`;
+    return c.html(
+      productEditPage({
+        user: c.get("user"),
+        product,
+        values: productValues(product),
+        sizeState: sizeStateFromProduct(product),
+        deleteError,
+      }),
+      409,
+    );
+  }
+  return c.redirect("/products?deleted=1");
 });
