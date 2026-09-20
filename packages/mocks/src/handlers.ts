@@ -66,6 +66,10 @@ function lineRejection(line: {
 // key off allDrops so "every drop" is spelled once; adding a fixture drop reaches
 // the slug reads without touching this.
 const dropsBySlug = new Map(allDrops.map((d) => [d.slug, d] as const));
+
+// Every drop by id, for the admin's edit-form read. The bare rows (adminDrops)
+// are already the products-stripped Drop shape the detail returns.
+const dropsById = new Map(adminDrops.map((d) => [d.id, d] as const));
 const productsBySlug = new Map(
   allDrops.flatMap((d) => d.products).map((p) => [p.slug, p] as const),
 );
@@ -128,6 +132,16 @@ export const handlers = [
   // products: without it, /admin/drops would match */drops and return the live
   // collections. The real API distinguishes the literal prefixes.
   http.get("*/admin/drops", () => HttpResponse.json(adminDrops)),
+
+  // The admin's drop detail, keyed off the fixtures by id. Registered before
+  // */drops/:slug for the same *-wildcard reason as the list: without it,
+  // /admin/drops/1 would match */drops/:slug (slug "1") and 404.
+  http.get("*/admin/drops/:id", ({ params }) => {
+    const drop = dropsById.get(Number(params.id));
+    return drop
+      ? HttpResponse.json(drop)
+      : HttpResponse.json({ error: "not_found" }, { status: 404 });
+  }),
 
   http.get("*/drops", () => HttpResponse.json(liveDrops)),
 

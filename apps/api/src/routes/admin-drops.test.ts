@@ -21,3 +21,20 @@ test("GET /admin/drops lists every drop, draft and archived included", async () 
   );
   assert.ok(drops.some((d) => d.status === "draft"));
 });
+
+test("GET /admin/drops/:id returns one drop, any status", async () => {
+  // Drop 3 is a draft the catalogue would hide; the admin edits it, so the detail
+  // read serves it.
+  const res = await adminDrops.request("/admin/drops/3");
+  assert.equal(res.status, 200);
+  const drop = (await res.json()) as Drop;
+  assert.equal(drop.id, 3);
+  assert.equal(drop.status, "draft");
+});
+
+test("GET /admin/drops/:id is 404 for an unknown or bad id", async () => {
+  const missing = await adminDrops.request("/admin/drops/999");
+  assert.equal(missing.status, 404);
+  const bad = await adminDrops.request("/admin/drops/abc");
+  assert.equal(bad.status, 404);
+});

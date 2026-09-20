@@ -23,3 +23,15 @@ const listDropsStmt = db.prepare(
 export function listDropsForAdmin(): Drop[] {
   return listDropsStmt.all() as Drop[];
 }
+
+// One drop for the edit form — any status, so a draft or archived collection is
+// editable the same as a live one. The bare row, without its products (those are
+// the products screen's read); undefined when there is no such drop, so the route
+// 404s.
+const dropByIdStmt = db.prepare(
+  `SELECT ${DROP_COLUMNS} FROM drops WHERE id = ?`,
+);
+
+export function getDropForAdmin(id: number): Drop | undefined {
+  return dropByIdStmt.get(id) as Drop | undefined;
+}

@@ -204,6 +204,18 @@ test("GET /admin/drops returns the admin drops fixture verbatim", async () => {
   assert.deepEqual(await res.json(), adminDrops);
 });
 
+test("GET /admin/drops/:id returns one drop fixture verbatim", async () => {
+  // The edit-form read is the bare Drop row, any status. Drop 1 is the redline
+  // collection; its detail must match the admin-drops list's first row byte for
+  // byte (the same products-stripped shape).
+  const res = await adminDropsRoute.request("/admin/drops/1");
+  assert.equal(res.status, 200);
+  assert.deepEqual(
+    await res.json(),
+    adminDrops.find((d) => d.id === 1),
+  );
+});
+
 test("GET /admin/products/:id returns the product fixture verbatim", async () => {
   // The admin's edit-form read is the same ProductWithSizes shape the catalogue
   // serves, but for any status. Product 10 is live, so its detail must match the

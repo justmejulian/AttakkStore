@@ -210,6 +210,17 @@ test("GET /admin/drops lists every drop, before the live-collections handler", a
   assert.deepEqual(await res.json(), adminDrops);
 });
 
+test("GET /admin/drops/:id serves a drop and 404s an unknown id, before the slug read", async () => {
+  const detail = await fetch(`${base}/admin/drops/1`);
+  assert.equal(detail.status, 200);
+  assert.deepEqual(
+    await detail.json(),
+    adminDrops.find((d) => d.id === 1),
+  );
+
+  assert.equal((await fetch(`${base}/admin/drops/999`)).status, 404);
+});
+
 test("GET /admin/products lists the rows and 404s an unknown detail id", async () => {
   const list = await fetch(`${base}/admin/products`);
   assert.equal(list.status, 200);
