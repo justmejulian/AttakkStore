@@ -15,7 +15,7 @@ is pinned and shared there; see the [root README](../../README.md).
 
 ```sh
 pnpm install                     # from the repo root
-pnpm --filter @attakk/shop dev   # or `pnpm dev`
+pnpm --filter @attakk/shop dev   # or `pnpm dev:shop`
 ```
 
 Vite DevTools with the Oxc integration is wired up dev-only and loads only under

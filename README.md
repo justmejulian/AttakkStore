@@ -30,7 +30,8 @@ pnpm install
 ## Common tasks
 
 ```sh
-pnpm dev           # run the shop dev server
+pnpm dev:shop      # run the shop dev server
+pnpm dev:admin     # run the admin dev server
 pnpm build         # build every app in the workspace
 pnpm check         # type-check every app that defines a check script
 ```
