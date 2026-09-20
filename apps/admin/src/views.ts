@@ -1,9 +1,15 @@
 import {
   type AdminProductRow,
+  type AdminUser,
   DISPLAY_FONTS,
   type Drop,
   DROP_STATUSES,
   MAX_ALT_LEN,
+  MAX_CREDITOR_ADDRESS_LEN,
+  MAX_CREDITOR_BUILDING_NUMBER_LEN,
+  MAX_CREDITOR_CITY_LEN,
+  MAX_CREDITOR_NAME_LEN,
+  MAX_CREDITOR_ZIP_LEN,
   MAX_DROP_BODY_LEN,
   MAX_DROP_NAME_LEN,
   MAX_DROP_NOTE_LEN,
@@ -14,9 +20,12 @@ import {
   MAX_HEX_COLOR_LEN,
   MAX_PRODUCT_DESCRIPTION_LEN,
   MAX_PRODUCT_NAME_LEN,
+  MAX_PASSWORD_LEN,
   MAX_SIZE_LABEL_LEN,
   MAX_SLUG_LEN,
+  MAX_USERNAME_LEN,
   MIN_DROP_YEAR,
+  MIN_PASSWORD_LEN,
   ORDER_STATUSES,
   type OrderListRow,
   type OrderStatus,
@@ -150,7 +159,8 @@ function shell(title: string, user: Session, body: Html): Html {
     html`<header>
         <nav>
           <a href="/orders">Orders</a> · <a href="/products">Products</a> ·
-          <a href="/drops">Drops</a>
+          <a href="/drops">Drops</a> · <a href="/users">Users</a> ·
+          <a href="/settings">Settings</a>
         </nav>
         <p>
           Signed in as <strong>${user.username}</strong>.
@@ -1024,6 +1034,220 @@ export function productEditPage(opts: {
       </p>
       <form method="post" action="/products/${product.id}/delete">
         <button type="submit">Delete product</button>
+      </form>`,
+  );
+}
+
+// ----------------------------------------------------------------- settings
+
+// The settings form's text fields, as strings echoed back into the inputs —
+// whether they came from the stored settings or a rejected submission. shop_open
+// is the one boolean, carried separately as a checkbox rather than a text field.
+export type SettingsFormValues = Record<
+  | "creditor_name"
+  | "creditor_address"
+  | "creditor_building_number"
+  | "creditor_zip"
+  | "creditor_city"
+  | "creditor_country"
+  | "creditor_account"
+  | "notify_email",
+  string
+>;
+
+// The Settings screen: the shop-wide open/closed switch, the creditor block the
+// QR bill is paid to, and the address a new-order notification goes to. One form
+// posting the whole object; `errors` marks a field the shared zod refused (a
+// mistyped IBAN, a bad country or email), `flash` confirms a save. The creditor
+// fields may all be blank — an unconfigured shop falls back to a placeholder — so
+// only the switch is structurally required.
+export function settingsPage(opts: {
+  user: Session;
+  values: SettingsFormValues;
+  shopOpen: boolean;
+  errors?: Partial<Record<keyof SettingsFormValues, string>>;
+  flash?: string;
+}) {
+  const { values, errors } = opts;
+  return shell(
+    "Settings",
+    opts.user,
+    html`<h1>Settings</h1>
+      ${opts.flash ? html`<p role="status">${opts.flash}</p>` : ""}
+      <form method="post" action="/settings">
+        <p>
+          <label>
+            <input
+              type="checkbox"
+              name="shop_open"
+              value="1"
+              ${opts.shopOpen ? html`checked` : html``}
+            />
+            Shop open — accepting orders
+          </label>
+          <small>Unchecked shows the Drop Over page and refuses new orders.</small>
+        </p>
+
+        <h2>Creditor</h2>
+        <p>
+          The account the QR bill is paid to. Leave blank while setting up — a
+          placeholder is used until it is filled in.
+        </p>
+        ${textField({
+          label: "Name",
+          name: "creditor_name",
+          values,
+          errors,
+          maxlength: MAX_CREDITOR_NAME_LEN,
+        })}
+        ${textField({
+          label: "Address",
+          name: "creditor_address",
+          values,
+          errors,
+          maxlength: MAX_CREDITOR_ADDRESS_LEN,
+          hint: "Street, without the number.",
+        })}
+        ${textField({
+          label: "Building number",
+          name: "creditor_building_number",
+          values,
+          errors,
+          maxlength: MAX_CREDITOR_BUILDING_NUMBER_LEN,
+        })}
+        ${textField({
+          label: "ZIP",
+          name: "creditor_zip",
+          values,
+          errors,
+          maxlength: MAX_CREDITOR_ZIP_LEN,
+        })}
+        ${textField({
+          label: "City",
+          name: "creditor_city",
+          values,
+          errors,
+          maxlength: MAX_CREDITOR_CITY_LEN,
+        })}
+        ${textField({
+          label: "Country",
+          name: "creditor_country",
+          values,
+          errors,
+          maxlength: 2,
+          hint: "CH, or blank.",
+        })}
+        ${textField({
+          label: "IBAN",
+          name: "creditor_account",
+          values,
+          errors,
+          hint: "A CH or LI account. Checked before it is saved; a QR-IBAN is not accepted.",
+        })}
+
+        <h2>Notifications</h2>
+        ${textField({
+          label: "Notification email",
+          name: "notify_email",
+          values,
+          errors,
+          type: "text",
+          hint: "Where a new-order alert is sent. Blank for none.",
+        })}
+
+        <button type="submit">Save settings</button>
+      </form>`,
+  );
+}
+
+// -------------------------------------------------------------------- users
+
+// One admin user's row in the list: their status, when they were created and last
+// signed in, and the one control the row carries — deactivate an active user or
+// restore a switched-off one. There is no delete; `active` is a flag, so a
+// deactivated admin's past actions stay attributable.
+function userRow(u: AdminUser): Html {
+  const active = u.active === 1;
+  return html`<tr>
+    <td>${u.username}</td>
+    <td>${active ? "active" : "deactivated"}</td>
+    <td>${formatTimestamp(u.created_at)}</td>
+    <td>${u.last_login_at ? formatTimestamp(u.last_login_at) : "never"}</td>
+    <td>
+      <form method="post" action="/users/${u.id}/active">
+        <input type="hidden" name="active" value="${active ? "false" : "true"}" />
+        <button type="submit">${active ? "Deactivate" : "Restore"}</button>
+      </form>
+    </td>
+  </tr>`;
+}
+
+// The Users screen: every admin with its deactivate/restore control, and a form to
+// add another. `actionError` shows above the list when a toggle was refused (the
+// last active admin can't be switched off); `errors` marks a create field the API
+// or the shared zod rejected (a taken username, a too-short password); `flash`
+// confirms a create or a toggle. The password is never echoed back — only the
+// username survives a rejected create.
+export function usersPage(opts: {
+  user: Session;
+  users: AdminUser[];
+  usernameValue?: string;
+  errors?: Partial<Record<"username" | "password", string>>;
+  actionError?: string;
+  flash?: string;
+}) {
+  const usernameError = opts.errors?.username;
+  const passwordError = opts.errors?.password;
+  return shell(
+    "Users",
+    opts.user,
+    html`<h1>Users</h1>
+      ${opts.flash ? html`<p role="status">${opts.flash}</p>` : ""}
+      ${opts.actionError ? html`<p role="alert">${opts.actionError}</p>` : ""}
+      <table>
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Status</th>
+            <th>Created</th>
+            <th>Last login</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${opts.users.map((u) => userRow(u))}
+        </tbody>
+      </table>
+
+      <h2>Add a user</h2>
+      <form method="post" action="/users">
+        <p>
+          <label
+            >Username
+            <input
+              name="username"
+              value="${opts.usernameValue ?? ""}"
+              autocomplete="off"
+              maxlength="${MAX_USERNAME_LEN}"
+              required
+          /></label>
+          ${usernameError ? html`<span role="alert">${usernameError}</span>` : ""}
+        </p>
+        <p>
+          <label
+            >Password
+            <input
+              name="password"
+              type="password"
+              autocomplete="new-password"
+              minlength="${MIN_PASSWORD_LEN}"
+              maxlength="${MAX_PASSWORD_LEN}"
+              required
+          /></label>
+          <small>At least ${MIN_PASSWORD_LEN} characters.</small>
+          ${passwordError ? html`<span role="alert">${passwordError}</span>` : ""}
+        </p>
+        <button type="submit">Add user</button>
       </form>`,
   );
 }

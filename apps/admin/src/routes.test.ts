@@ -4,9 +4,12 @@ import {
   adminCredentials,
   adminDrops,
   adminProducts,
+  adminUserDeactivated,
+  adminUsers,
   jerseyProduct,
   orderListRows,
   paidOrder,
+  settings,
 } from "@attakk/mocks";
 import { server } from "@attakk/mocks/node";
 import { http, HttpResponse } from "msw";
@@ -695,4 +698,139 @@ test("POST /drops/:id with a bad body on a missing drop is a 404, not a 400", as
     name: "",
   });
   assert.equal(res.status, 404);
+});
+
+// -------------------------------------------------------------- settings screen
+
+test("the settings screen is behind the auth gate", async () => {
+  const res = await app.request("/settings");
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get("location"), "/login");
+});
+
+test("GET /settings renders the form with the stored values", async () => {
+  const res = await get("/settings", await authed());
+  assert.equal(res.status, 200);
+  const body = await res.text();
+  assert.match(body, /<form method="post" action="\/settings">/);
+  // Shop open is checked and the stored creditor fields are echoed in.
+  assert.match(body, /name="shop_open"[^>]*checked|checked[^>]*name="shop_open"/);
+  assert.match(body, new RegExp(`value="${settings.creditor_account}"`));
+  assert.match(body, new RegExp(`value="${settings.notify_email}"`));
+});
+
+// A well-formed settings body — the fixture, which round-trips through the shared
+// zod unchanged, so it is what the admin submits on a plain save.
+const settingsForm: Record<string, string> = {
+  shop_open: "1",
+  creditor_name: settings.creditor_name,
+  creditor_address: settings.creditor_address,
+  creditor_building_number: settings.creditor_building_number,
+  creditor_zip: settings.creditor_zip,
+  creditor_city: settings.creditor_city,
+  creditor_country: settings.creditor_country,
+  creditor_account: settings.creditor_account,
+  notify_email: settings.notify_email,
+};
+
+test("POST /settings saves and redirects to a fresh read", async () => {
+  const res = await form("/settings", await authed(), settingsForm);
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get("location"), "/settings?saved=1");
+});
+
+test("a closed shop omits shop_open and still saves", async () => {
+  const { shop_open, ...closed } = settingsForm;
+  void shop_open;
+  const res = await form("/settings", await authed(), closed);
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get("location"), "/settings?saved=1");
+});
+
+test("POST /settings with a bad IBAN is a 400 with the value kept", async () => {
+  const res = await form("/settings", await authed(), {
+    ...settingsForm,
+    creditor_account: "CH00INVALIDIBAN0000000",
+  });
+  assert.equal(res.status, 400);
+  const body = await res.text();
+  assert.match(body, /IBAN is not valid/);
+  assert.match(body, /value="CH00INVALIDIBAN0000000"/);
+});
+
+test("POST /settings with a bad email is a 400 with an error", async () => {
+  const res = await form("/settings", await authed(), {
+    ...settingsForm,
+    notify_email: "not-an-email",
+  });
+  assert.equal(res.status, 400);
+  assert.match(await res.text(), /valid email address/);
+});
+
+// ----------------------------------------------------------------- users screen
+
+test("the users screen is behind the auth gate", async () => {
+  const res = await app.request("/users");
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get("location"), "/login");
+});
+
+test("GET /users lists every admin with an add form", async () => {
+  const res = await get("/users", await authed());
+  assert.equal(res.status, 200);
+  const body = await res.text();
+  for (const u of adminUsers) assert.match(body, new RegExp(u.username));
+  // The deactivated row offers Restore; the active one Deactivate.
+  assert.match(body, /Restore/);
+  assert.match(body, /Deactivate/);
+  assert.match(body, /<form method="post" action="\/users">/);
+});
+
+test("POST /users creates and returns to the list", async () => {
+  const res = await form("/users", await authed(), {
+    username: "neweditor",
+    password: "a-strong-password",
+  });
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get("location"), "/users?created=1");
+});
+
+test("POST /users keeps the username error on a clash", async () => {
+  const res = await form("/users", await authed(), {
+    username: "admin", // already taken
+    password: "a-strong-password",
+  });
+  assert.equal(res.status, 409);
+  const body = await res.text();
+  assert.match(body, /already taken/);
+  assert.match(body, /value="admin"/);
+});
+
+test("POST /users with a short password is a 400 before the API is called", async () => {
+  const res = await form("/users", await authed(), {
+    username: "shorty",
+    password: "short",
+  });
+  assert.equal(res.status, 400);
+  // The username survives; the password is never echoed back.
+  assert.match(await res.text(), /value="shorty"/);
+});
+
+test("POST /users/:id/active restores a deactivated user", async () => {
+  const res = await form(
+    `/users/${adminUserDeactivated.id}/active`,
+    await authed(),
+    { active: "true" },
+  );
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get("location"), "/users?updated=1");
+});
+
+test("deactivating the last active admin is refused with the reason kept", async () => {
+  // User 1 is the only active admin in the fixtures; the API guards it.
+  const res = await form("/users/1/active", await authed(), {
+    active: "false",
+  });
+  assert.equal(res.status, 409);
+  assert.match(await res.text(), /last active admin/);
 });

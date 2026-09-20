@@ -1,4 +1,5 @@
 import {
+  adminUserCreateInput,
   dropInput,
   dropStatusInput,
   loginInput,
@@ -9,6 +10,7 @@ import {
   productCreateInput,
   productInput,
   productSizesInput,
+  settingsInput,
   type AdminProductRow,
   type AdminUser,
   type Drop,
@@ -17,6 +19,7 @@ import {
   type OrderWithItems,
   type Product,
   type ProductWithSizes,
+  type Settings,
 } from "@attakk/types";
 import { type Context, Hono } from "hono";
 import { apiFetch, jsonBody } from "./api.js";
@@ -39,7 +42,10 @@ import {
   productsPage,
   serviceErrorPage,
   type NewSizeValues,
+  type SettingsFormValues,
+  settingsPage,
   type SizeRowValues,
+  usersPage,
 } from "./views.js";
 
 // Whether an API response body carries the identity a session needs. Only id and
@@ -1051,4 +1057,207 @@ app.post("/drops/:id/status", async (c) => {
   );
   if ("errorPage" in r) return r.errorPage;
   return c.redirect("/drops?updated=1");
+});
+
+// ---------------------------------------------------------- settings screen
+
+const SETTINGS_TEXT_FIELDS = [
+  "creditor_name",
+  "creditor_address",
+  "creditor_building_number",
+  "creditor_zip",
+  "creditor_city",
+  "creditor_country",
+  "creditor_account",
+  "notify_email",
+] as const;
+
+// The submitted settings as settingsInput expects them: the text fields as-is
+// (it trims and normalises them itself) and shop_open as the boolean the checkbox
+// stands for — present (any value) is open, absent is closed.
+function settingsInputFromForm(form: FormBody): Record<string, unknown> {
+  const out: Record<string, unknown> = { shop_open: "shop_open" in form };
+  for (const f of SETTINGS_TEXT_FIELDS) out[f] = formStr(form[f]);
+  return out;
+}
+
+// The submitted text values as strings, to echo back into the form on a reject.
+function settingsFormValues(form: FormBody): SettingsFormValues {
+  return Object.fromEntries(
+    SETTINGS_TEXT_FIELDS.map((f) => [f, formStr(form[f])]),
+  ) as SettingsFormValues;
+}
+
+function settingsValues(s: Settings): SettingsFormValues {
+  return Object.fromEntries(
+    SETTINGS_TEXT_FIELDS.map((f) => [f, s[f]]),
+  ) as SettingsFormValues;
+}
+
+// The shared zod's refine codes as a message beside the field. A blank value is
+// always accepted, so these only ever fire on a non-blank one that is wrong.
+const SETTINGS_ERROR_MESSAGES: Record<string, string> = {
+  invalid_iban: "That IBAN is not valid — check for a typo, and note a QR-IBAN is not accepted.",
+  invalid_email: "Enter a valid email address, or leave it blank.",
+  invalid_country: "The country must be CH, or blank.",
+};
+
+// fieldErrors keyed to the settings fields, then the known refine codes swapped
+// for a readable message; anything else (a length cap) keeps zod's own text.
+function settingsErrors(
+  issues: readonly { path: PropertyKey[]; message: string }[],
+): Partial<Record<keyof SettingsFormValues, string>> {
+  const errors = fieldErrors(SETTINGS_TEXT_FIELDS, issues);
+  for (const key of Object.keys(errors) as (keyof SettingsFormValues)[]) {
+    const code = errors[key];
+    if (code && code in SETTINGS_ERROR_MESSAGES) {
+      errors[key] = SETTINGS_ERROR_MESSAGES[code];
+    }
+  }
+  return errors;
+}
+
+app.get("/settings", async (c) => {
+  const r = await apiRequest(c, "/admin/settings");
+  if ("errorPage" in r) return r.errorPage;
+  const settings = (await r.res.json()) as Settings;
+  const flash = c.req.query("saved") ? "Saved." : undefined;
+  return c.html(
+    settingsPage({
+      user: c.get("user"),
+      values: settingsValues(settings),
+      shopOpen: settings.shop_open,
+      flash,
+    }),
+  );
+});
+
+// Save the whole settings object. Validated with the same zod the API enforces;
+// on a bad IBAN, country or email the form comes back with the submitted values
+// kept and the error beside the field. Because the admin validates first, a
+// well-formed body is one the API accepts, so the PUT has no expected 4xx — an
+// unreachable or erroring API is the shared service page. On success, redirect to
+// a fresh read (POST-then-redirect) so the stored, normalised values are shown.
+app.post("/settings", async (c) => {
+  const form = await c.req.parseBody();
+  const parsed = settingsInput.safeParse(settingsInputFromForm(form));
+  if (!parsed.success) {
+    return c.html(
+      settingsPage({
+        user: c.get("user"),
+        values: settingsFormValues(form),
+        shopOpen: "shop_open" in form,
+        errors: settingsErrors(parsed.error.issues),
+      }),
+      400,
+    );
+  }
+  const r = await apiRequest(
+    c,
+    "/admin/settings",
+    jsonBody("PUT", parsed.data),
+  );
+  if ("errorPage" in r) return r.errorPage;
+  return c.redirect("/settings?saved=1");
+});
+
+// ------------------------------------------------------------- users screen
+
+const ADMIN_USER_FIELDS = ["username", "password"] as const;
+
+// The list read the users screen and its two writes all share on a reject.
+async function loadUsers(
+  c: Context<AdminEnv>,
+): Promise<{ users: AdminUser[] } | { errorPage: Response }> {
+  const r = await apiRequest(c, "/admin/users");
+  if ("errorPage" in r) return r;
+  return { users: (await r.res.json()) as AdminUser[] };
+}
+
+app.get("/users", async (c) => {
+  const r = await loadUsers(c);
+  if ("errorPage" in r) return r.errorPage;
+  const flash = c.req.query("created")
+    ? "User created."
+    : c.req.query("updated")
+      ? "User updated."
+      : undefined;
+  return c.html(usersPage({ user: c.get("user"), users: r.users, flash }));
+});
+
+// Create an admin user. Validated with the same zod the API enforces (a blank
+// username, a password under the floor); a username the API reports taken (409)
+// re-renders the form with the error on that field. The password is never echoed
+// back — only the username survives a reject. On success, back to the list.
+app.post("/users", async (c) => {
+  const form = await c.req.parseBody();
+  const username = formStr(form.username);
+  const parsed = adminUserCreateInput.safeParse({
+    username,
+    password: formStr(form.password),
+  });
+
+  const reject = async (
+    errors: Partial<Record<"username" | "password", string>>,
+    status: 400 | 409,
+  ): Promise<Response> => {
+    const r = await loadUsers(c);
+    if ("errorPage" in r) return r.errorPage;
+    return c.html(
+      usersPage({
+        user: c.get("user"),
+        users: r.users,
+        usernameValue: username,
+        errors,
+      }),
+      status,
+    );
+  };
+
+  if (!parsed.success) {
+    return reject(fieldErrors(ADMIN_USER_FIELDS, parsed.error.issues), 400);
+  }
+
+  const w = await apiWrite(c, "/admin/users", jsonBody("POST", parsed.data));
+  if ("errorPage" in w) return w.errorPage;
+  if ("conflict" in w) {
+    const message =
+      w.conflict === "username_taken"
+        ? "That username is already taken."
+        : `The user was refused (${w.conflict}).`;
+    return reject(
+      { username: message },
+      w.conflict === "username_taken" ? 409 : 400,
+    );
+  }
+  return c.redirect("/users?created=1");
+});
+
+// Deactivate or restore a user. The desired state rides in a hidden field the row
+// sets from the user's current status, so the button reads Deactivate or Restore.
+// The API refuses to switch off the last active admin (last_admin, 409); that
+// re-renders the list with the reason. On success, back to the list.
+app.post("/users/:id/active", async (c) => {
+  const id = c.req.param("id");
+  const form = await c.req.parseBody();
+  const active = formStr(form.active) === "true";
+  const w = await apiWrite(
+    c,
+    `/admin/users/${encodeURIComponent(id)}/active`,
+    jsonBody("PATCH", { active }),
+  );
+  if ("errorPage" in w) return w.errorPage;
+  if ("conflict" in w) {
+    const r = await loadUsers(c);
+    if ("errorPage" in r) return r.errorPage;
+    const message =
+      w.conflict === "last_admin"
+        ? "That is the last active admin — deactivating it would lock everyone out."
+        : `The change was refused (${w.conflict}).`;
+    return c.html(
+      usersPage({ user: c.get("user"), users: r.users, actionError: message }),
+      409,
+    );
+  }
+  return c.redirect("/users?updated=1");
 });
