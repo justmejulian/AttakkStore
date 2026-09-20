@@ -1,0 +1,82 @@
+/* Attakk token overrides on Lumos.
+ *
+ * The design is a token override on Lumos, not a parallel stylesheet: this file
+ * repoints Lumos's own custom properties and adds a few of our own, so the whole
+ * component library recolours and re-types coherently without any of it being
+ * rewritten. It loads last in the `base` layer, so these values win over
+ * base.css on equal specificity, and a Lumos upgrade stays a clean merge of
+ * base.css alone.
+ *
+ * Per-drop colour and display-font overrides come from the drop row later and
+ * set these same properties on a scoped wrapper; the values here are the
+ * site defaults everything falls back to. */
+
+:root {
+  /* Brand palette */
+  --paper: #f4f1ea;
+  --ink: #0b0b0b;
+  --marker: #ef233c;
+
+  /* Lumos light swatches → paper. background is light-300, the raised surface
+   * background-3 is light-100, so lightest is the pop surface. */
+  --light-100: #fcfaf5;
+  --light-200: #edeae1;
+  --light-300: #f4f1ea;
+
+  /* Lumos dark swatches → ink. */
+  --dark-700: #262626;
+  --dark-800: #171717;
+  --dark-900: #0b0b0b;
+
+  /* Marker red is the brand accent; paper reads on it, not the dark default. */
+  --brand-500: #ef233c;
+  --brand-text: var(--paper);
+
+  /* Type. Urbanist carries body and UI; Antonio is the display face used for
+   * headings and the site default drop font. JetBrains Mono is every label and
+   * price; Permanent Marker is reserved for collection names. */
+  --font-display: var(--font-antonio);
+  --font-label: var(--font-jetbrains-mono);
+  --font-collection: var(--font-permanent-marker);
+
+  --primary-family: var(--font-urbanist, system-ui, sans-serif);
+
+  --display-font-family: var(--font-display);
+  --h1-font-family: var(--font-display);
+  --h2-font-family: var(--font-display);
+  --h3-font-family: var(--font-display);
+  --h4-font-family: var(--font-display);
+  --h5-font-family: var(--font-display);
+  --h6-font-family: var(--font-display);
+
+  /* Leading-trim for the display face. Lumos's --primary-trim values (0.4/0.38)
+   * are hand-tuned to Inter; Urbanist's cap-height, ascent and descent all sit
+   * within ~2% of Inter's, so body text keeps them. Antonio is condensed with a
+   * much taller ascent (asc 1.15, cap 0.86 vs Inter's 0.97/0.73), so its
+   * headings over-trim at the top with Inter's numbers. These are anchored to
+   * the Inter baseline via the measured metric deltas — approximate, so verify
+   * against rendered headings and adjust by eye. */
+  --antonio-trim-top: 0.45em;
+  --antonio-trim-bottom: 0.28em;
+
+  --display-trim-top: var(--antonio-trim-top);
+  --display-trim-bottom: var(--antonio-trim-bottom);
+  --h1-trim-top: var(--antonio-trim-top);
+  --h1-trim-bottom: var(--antonio-trim-bottom);
+  --h2-trim-top: var(--antonio-trim-top);
+  --h2-trim-bottom: var(--antonio-trim-bottom);
+  --h3-trim-top: var(--antonio-trim-top);
+  --h3-trim-bottom: var(--antonio-trim-bottom);
+  --h4-trim-top: var(--antonio-trim-top);
+  --h4-trim-bottom: var(--antonio-trim-bottom);
+  --h5-trim-top: var(--antonio-trim-top);
+  --h5-trim-bottom: var(--antonio-trim-bottom);
+  --h6-trim-top: var(--antonio-trim-top);
+  --h6-trim-bottom: var(--antonio-trim-bottom);
+
+  /* Hard corners everywhere. --radius-round is deliberately left alone: it is
+   * Lumos's "make this a full circle/pill" token (avatars, round icon buttons),
+   * a shape choice rather than a corner radius, so hard corners don't apply. */
+  --radius-small: 0;
+  --radius-main: 0;
+}

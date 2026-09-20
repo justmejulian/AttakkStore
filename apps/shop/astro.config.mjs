@@ -45,20 +45,46 @@ export default defineConfig({
       filter: (page) => !isNoindexRoute(new URL(page).pathname),
     }),
   ],
+  // The four faces the storefront ships, all self-hosted: Astro downloads them
+  // from Google at build time and serves them off our own origin, so the browser
+  // never talks to fonts.gstatic.com. The set mirrors DISPLAY_FONTS in
+  // packages/types, the fixed list a drop's display font is picked from.
   fonts: [
     {
-      name: "Inter",
-      cssVariable: "--font-inter",
-      provider: fontProviders.local(),
-      options: {
-        variants: [
-          {
-            weight: 400,
-            style: "normal",
-            src: ["./src/assets/fonts/inter-regular.woff2"],
-          },
-        ],
-      },
+      // Body and UI text.
+      name: "Urbanist",
+      cssVariable: "--font-urbanist",
+      provider: fontProviders.google(),
+      weights: [400, 500, 600, 700],
+      styles: ["normal"],
+      subsets: ["latin"],
+    },
+    {
+      // Display type — headings and the site default drop font.
+      name: "Antonio",
+      cssVariable: "--font-antonio",
+      provider: fontProviders.google(),
+      weights: [400, 500, 600, 700],
+      styles: ["normal"],
+      subsets: ["latin"],
+    },
+    {
+      // Labels, eyebrows, prices, size pills.
+      name: "JetBrains Mono",
+      cssVariable: "--font-jetbrains-mono",
+      provider: fontProviders.google(),
+      weights: [400, 500, 700],
+      styles: ["normal"],
+      subsets: ["latin"],
+    },
+    {
+      // Collection names only.
+      name: "Permanent Marker",
+      cssVariable: "--font-permanent-marker",
+      provider: fontProviders.google(),
+      weights: [400],
+      styles: ["normal"],
+      subsets: ["latin"],
     },
   ],
   vite: { build: { cssTarget: "safari15.4" } },
