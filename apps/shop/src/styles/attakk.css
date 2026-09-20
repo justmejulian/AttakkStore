@@ -39,6 +39,19 @@
   --font-label: var(--font-jetbrains-mono);
   --font-collection: var(--font-permanent-marker);
 
+  /* Role aliases the chrome and later data-driven pieces read, so a component's
+   * CSS names the job (label, price, collection) rather than the face. Labels
+   * and prices are the same mono under two names — the site has one mono. */
+  --display-family: var(--font-display);
+  --label-family: var(--font-label);
+  --mono-family: var(--font-label);
+  --marker-family: var(--font-collection);
+
+  /* Label type: the small uppercase mono used for eyebrows, nav and ticker
+   * items, prices and fine print. A size and its tracking, paired. */
+  --label: 0.6875rem;
+  --label-letter-spacing: 0.12em;
+
   --primary-family: var(--font-urbanist, system-ui, sans-serif);
 
   --display-font-family: var(--font-display);

@@ -1,6 +1,8 @@
 ---
-import Icon from "@/components/Media/Icon.astro";
-import logo from "@/assets/logo/logo.svg";
+/**
+ * Footer — the wordmark, three link columns and a fine-print bar. The year is
+ * rendered server-side, so no script is needed to keep it current.
+ */
 import { SITE_NAME } from "@/consts.ts";
 
 interface Props {
@@ -9,6 +11,31 @@ interface Props {
 }
 
 const { render = true } = Astro.props;
+
+const columns = [
+  {
+    heading: "Shop",
+    links: [
+      { href: "/", label: "Current drop" },
+      { href: "/drops", label: "All drops" },
+      { href: "/archive", label: "Archive" },
+    ],
+  },
+  {
+    heading: "Studio",
+    links: [{ href: "/club", label: "The Club" }],
+  },
+  {
+    heading: "Legal",
+    links: [
+      { href: "/impressum", label: "Impressum" },
+      { href: "/agb", label: "Terms" },
+      { href: "/privacy", label: "Privacy" },
+    ],
+  },
+];
+
+const year = new Date().getFullYear();
 ---
 
 {
@@ -16,110 +43,136 @@ const { render = true } = Astro.props;
     <footer class="footer_wrap">
       <div class="footer_inner">
         <div class="footer_top">
-          <a class="footer_logo" href="/" aria-label={SITE_NAME}>
-            <Icon src={logo} variant="full-width" />
-          </a>
-          <nav aria-label="Footer">
-            <ul class="footer_links">
-              <li>
-                <a class="footer_link" href="/">
-                  Home
-                </a>
-              </li>
-              <li>
-                <a class="footer_link" href="/example-components">
-                  Example Components
-                </a>
-              </li>
-            </ul>
-          </nav>
+          <div class="footer_brand">
+            <p class="footer_wordmark">ATTAKK</p>
+            <p class="footer_tagline">A gym. A team. A small uniform brand.</p>
+          </div>
+          <div class="footer_cols">
+            {columns.map((column) => (
+              <nav class="footer_col" aria-label={column.heading}>
+                <p class="footer_heading">{column.heading}</p>
+                {column.links.map((link) => (
+                  <a class="footer_link" href={link.href}>
+                    {link.label}
+                  </a>
+                ))}
+              </nav>
+            ))}
+          </div>
         </div>
         <div class="footer_bottom">
-          <p class="footer_copyright text-style-small">
-            &copy; <span id="year">{new Date().getFullYear()}</span>&#160;
-            {SITE_NAME}
-          </p>
+          <span>
+            &copy; {SITE_NAME} {year}
+          </span>
+          <span>Built in Zürich · worn everywhere</span>
+          <span>VAT CHE-XXX.XXX.XXX</span>
         </div>
       </div>
     </footer>
   )
 }
 
-<script>
-  const year = document.querySelector<HTMLSpanElement>("#year");
-
-  if (year) {
-    year.textContent = new Date().getFullYear().toString();
-  }
-</script>
-
 <style is:global>
   @layer components {
     .footer_wrap {
-      display: flex;
-      justify-content: center;
-      padding-block: var(--section-space-small);
-      padding-inline: var(--site-margin);
       background-color: var(--background);
       color: var(--text);
       border-top: var(--border-width) solid var(--border);
+      padding-top: var(--section-space-small);
+      padding-bottom: var(--space-5);
+      padding-inline: var(--site-margin);
     }
 
     .footer_inner {
-      width: 100%;
+      width: var(--site-width);
       max-width: var(--max-width-main);
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-6);
+      margin-inline: auto;
     }
 
     .footer_top {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      gap: var(--space-4) var(--space-6);
+      display: grid;
+      grid-template-columns: minmax(0, 1.3fr) minmax(0, 2fr);
+      gap: var(--space-8);
+      padding-bottom: var(--space-7);
+      border-bottom: var(--border-width) solid var(--border);
     }
 
-    .footer_logo {
-      display: block;
-      width: 7.5rem;
-      max-width: 100%;
-      transition: opacity var(--hover-duration) var(--hover-ease);
-      @media (hover: hover) {
-        &:hover {
-          opacity: 0.6;
-        }
-      }
+    .footer_wordmark {
+      margin: 0;
+      font-family: var(--display-family);
+      font-weight: var(--primary-bold);
+      font-size: clamp(3.5rem, 2.1429rem + 6.7857vw, 9rem);
+      line-height: 0.9;
+      letter-spacing: 0.06em;
     }
 
-    .footer_links {
+    .footer_tagline {
+      margin-top: var(--space-3);
+      font-family: var(--label-family);
+      font-size: var(--label);
+      letter-spacing: var(--label-letter-spacing);
+      text-transform: uppercase;
+      color: var(--text-2);
+    }
+
+    .footer_cols {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+      gap: var(--space-5);
+    }
+
+    .footer_col {
       display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: var(--space-4);
-      font-size: var(--text-small);
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    .footer_heading {
+      margin: 0 0 var(--space-1);
+      font-family: var(--label-family);
+      font-size: var(--label);
+      letter-spacing: var(--label-letter-spacing);
+      text-transform: uppercase;
       font-weight: var(--primary-medium);
     }
 
     .footer_link {
-      color: var(--text-2);
+      font-size: var(--text-small);
       text-decoration: none;
+      color: var(--text-2);
       transition: color var(--hover-duration) var(--hover-ease);
       @media (hover: hover) {
         &:hover {
-          color: var(--text);
+          color: var(--heading-accent);
         }
       }
     }
 
     .footer_bottom {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: var(--space-2);
       padding-top: var(--space-4);
-      border-top: var(--border-width) solid var(--border);
+      font-family: var(--label-family);
+      font-size: 0.625rem;
+      letter-spacing: var(--label-letter-spacing);
+      text-transform: uppercase;
+      color: var(--text-2);
     }
 
-    .footer_copyright {
-      color: var(--text-2);
+    @media (width < 64rem) {
+      .footer_top {
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--space-6);
+      }
+    }
+
+    /* Clear the fixed mobile nav so the fine print isn't hidden under it. */
+    @media (width < 48rem) {
+      .footer_wrap {
+        padding-bottom: var(--space-8);
+      }
     }
   }
 </style>

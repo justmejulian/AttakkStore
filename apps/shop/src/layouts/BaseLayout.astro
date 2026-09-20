@@ -2,12 +2,17 @@
 import "@/styles/global.css";
 import BaseHead from "@/components/Utility/BaseHead.astro";
 import SkipLink from "@/components/Global/SkipLink.astro";
+import Ticker from "@/components/Global/Ticker.astro";
 import Nav from "@/components/Global/Nav.astro";
 import Footer from "@/components/Global/Footer.astro";
 import type { SeoProps } from "@/types.ts";
 
 type Props = SeoProps & {
-  /** Theme for the whole page. `inherit` leaves the root defaults in place. */
+  /**
+   * Theme for the whole page. `inherit` leaves the root defaults in place;
+   * the `light` default names them so a bare `theme-invert` (the ticker, the
+   * mobile nav) has a light context to flip against.
+   */
   theme?: "inherit" | "light" | "dark" | "brand";
   /**
    * Fix the nav over the page rather than letting it stick in flow, so the
@@ -15,9 +20,11 @@ type Props = SeoProps & {
    * `paddingTop="navoverlap"` to clear the bar.
    */
   overlap?: boolean;
+  /** Hide the ticker on pages that want a quieter head. */
+  ticker?: boolean;
 };
 
-const { theme = "inherit", overlap = false, ...seo } = Astro.props;
+const { theme = "light", overlap = false, ticker = true, ...seo } = Astro.props;
 ---
 
 <!doctype html>
@@ -28,6 +35,7 @@ const { theme = "inherit", overlap = false, ...seo } = Astro.props;
   </head>
   <body>
     <SkipLink />
+    <Ticker render={ticker} />
     <Nav overlap={overlap} />
     <main id="main" tabindex="-1">
       <slot />
