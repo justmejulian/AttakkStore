@@ -3,6 +3,7 @@ import { after, before, test } from "node:test";
 import { setupServer } from "msw/node";
 import {
   adminCredentials,
+  adminDrops,
   adminProducts,
   adminUser,
   createdOrder,
@@ -201,6 +202,12 @@ test("POST resend is 202 for a known order and 404 otherwise", async () => {
     method: "POST",
   });
   assert.equal(miss.status, 404);
+});
+
+test("GET /admin/drops lists every drop, before the live-collections handler", async () => {
+  const res = await fetch(`${base}/admin/drops`);
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), adminDrops);
 });
 
 test("GET /admin/products lists the rows and 404s an unknown detail id", async () => {

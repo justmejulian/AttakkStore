@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import {
   adminCredentials,
+  adminDrops,
   adminUser,
   allDrops,
   createdOrder,
@@ -32,6 +33,7 @@ const { catalog } = await import("./routes/catalog.js");
 const { orders } = await import("./routes/orders.js");
 const { admin } = await import("./routes/admin.js");
 const { adminProducts } = await import("./routes/admin-products.js");
+const { adminDrops: adminDropsRoute } = await import("./routes/admin-drops.js");
 
 after(() => cleanup());
 
@@ -192,6 +194,14 @@ test("POST /admin/login is 400 with the mock's body on a malformed request", asy
   const res = await postJson(admin, "/admin/login", { username: "x" });
   assert.equal(res.status, 400);
   assert.deepEqual(await res.json(), { error: "invalid" });
+});
+
+test("GET /admin/drops returns the admin drops fixture verbatim", async () => {
+  // Every drop, any status, ordered as they sort — independent of orders, so the
+  // bytes are pinnable here (unlike the product list's ordered_count).
+  const res = await adminDropsRoute.request("/admin/drops");
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), adminDrops);
 });
 
 test("GET /admin/products/:id returns the product fixture verbatim", async () => {

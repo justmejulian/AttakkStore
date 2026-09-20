@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { db } from "./db.js";
 import { admin } from "./routes/admin.js";
+import { adminDrops } from "./routes/admin-drops.js";
 import { adminOrders } from "./routes/admin-orders.js";
 import { adminProducts } from "./routes/admin-products.js";
 import { catalog } from "./routes/catalog.js";
@@ -49,6 +50,10 @@ app.route("/", adminOrders);
 // The admin's product screens: list every product by drop with an ordered-units
 // tally, and one product with its sizes and images for editing. Internal only.
 app.route("/", adminProducts);
+
+// The admin's drop reads: every drop, any status — the product create form reads
+// this to offer a drop to create into. Internal only.
+app.route("/", adminDrops);
 
 serve({ fetch: app.fetch, port: PORT }, ({ port }) => {
   console.log(`api listening on :${port}`);

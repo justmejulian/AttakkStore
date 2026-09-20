@@ -1,6 +1,7 @@
 import type {
   AdminProductRow,
   AdminUser,
+  Drop,
   DropWithProducts,
   OrderInput,
   OrderListRow,
@@ -305,6 +306,15 @@ export const uploadedImage: ProductImage = {
 // rows to read. The live subset (liveDrops) is derived from this by the API's
 // own status filter, not duplicated here.
 export const allDrops: DropWithProducts[] = [redlineDrop, originsDrop];
+
+// GET /admin/drops — every drop, any status, ordered as they sort; the drop
+// picker the product create form reads. Just the drop rows, without the products
+// each carries (allDrops is already in sort order).
+export const adminDrops: Drop[] = allDrops.map((drop) => {
+  const { products, ...row } = drop;
+  void products; // the admin drops list is the bare rows; products load elsewhere
+  return row;
+});
 
 /* ---------------------------------------------------------- admin products */
 

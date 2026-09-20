@@ -11,6 +11,7 @@ import {
 import { http, HttpResponse } from "msw";
 import {
   adminCredentials,
+  adminDrops,
   adminProducts,
   adminUser,
   allDrops,
@@ -123,6 +124,11 @@ function isOrderStatus(value: string): boolean {
 const MOCK_PAID_STAMP = "2026-01-05T00:00:00.000Z";
 
 export const handlers = [
+  // Registered before */drops for the same MSW *-wildcard reason as admin
+  // products: without it, /admin/drops would match */drops and return the live
+  // collections. The real API distinguishes the literal prefixes.
+  http.get("*/admin/drops", () => HttpResponse.json(adminDrops)),
+
   http.get("*/drops", () => HttpResponse.json(liveDrops)),
 
   http.get("*/drops/:slug", ({ params }) => {
