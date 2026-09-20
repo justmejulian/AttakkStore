@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { after, afterEach, before, test } from "node:test";
-import { adminCredentials, orderListRows, paidOrder } from "@attakk/mocks";
+import {
+  adminCredentials,
+  adminProducts,
+  jerseyProduct,
+  orderListRows,
+  paidOrder,
+} from "@attakk/mocks";
 import { server } from "@attakk/mocks/node";
 import { http, HttpResponse } from "msw";
 import { app } from "./app.js";
@@ -241,4 +247,83 @@ test("an unreachable/erroring API reads as a 502 service page", async () => {
   const res = await get("/orders", await authed());
   assert.equal(res.status, 502);
   assert.match(await res.text(), /could not be reached/);
+});
+
+// ---------------------------------------------------------- product screens
+
+test("the products list is behind the auth gate", async () => {
+  const res = await app.request("/products");
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get("location"), "/login");
+});
+
+test("GET /products lists products grouped by drop", async () => {
+  const res = await get("/products", await authed());
+  assert.equal(res.status, 200);
+  const body = await res.text();
+  for (const p of adminProducts) assert.match(body, new RegExp(p.name));
+  // Each row links to its edit page.
+  assert.match(body, new RegExp(`href="/products/${jerseyProduct.id}"`));
+});
+
+test("GET /products/:id shows the edit form with the current values", async () => {
+  const res = await get(`/products/${jerseyProduct.id}`, await authed());
+  assert.equal(res.status, 200);
+  const body = await res.text();
+  assert.match(body, new RegExp(`action="/products/${jerseyProduct.id}"`));
+  assert.match(body, new RegExp(`value="${jerseyProduct.slug}"`));
+});
+
+test("GET /products/:id is a 404 page for an unknown product", async () => {
+  const res = await get("/products/999", await authed());
+  assert.equal(res.status, 404);
+});
+
+test("POST /products/:id saves and redirects with a flash", async () => {
+  const res = await form(`/products/${jerseyProduct.id}`, await authed(), {
+    slug: jerseyProduct.slug,
+    name: "Redline Jersey v2",
+    description: "Updated.",
+    price_rappen: "9900",
+    fit: "Boxy",
+    fit_url: "",
+    min_orders: "1",
+    status: "live",
+    sort: "0",
+  });
+  assert.equal(res.status, 302);
+  assert.equal(
+    res.headers.get("location"),
+    `/products/${jerseyProduct.id}?saved=1`,
+  );
+});
+
+test("POST /products/:id keeps the slug error when the API reports a clash", async () => {
+  // The cap (product 11) owns redline-cap; the mock's edit handler 409s on it.
+  const res = await form(`/products/${jerseyProduct.id}`, await authed(), {
+    slug: "redline-cap",
+    name: "Redline Jersey",
+    price_rappen: "9500",
+    min_orders: "1",
+    status: "live",
+  });
+  assert.equal(res.status, 409);
+  const body = await res.text();
+  assert.match(body, /already in use/);
+  // The typed slug is kept in the field.
+  assert.match(body, /value="redline-cap"/);
+});
+
+test("POST /products/:id is a 400 with values kept when the form is invalid", async () => {
+  const res = await form(`/products/${jerseyProduct.id}`, await authed(), {
+    slug: "redline-jersey",
+    name: "", // required — rejected before the API is called
+    price_rappen: "9500",
+    min_orders: "1",
+    status: "live",
+  });
+  assert.equal(res.status, 400);
+  const body = await res.text();
+  // The edit form is re-rendered (its action present), values preserved.
+  assert.match(body, new RegExp(`action="/products/${jerseyProduct.id}"`));
 });

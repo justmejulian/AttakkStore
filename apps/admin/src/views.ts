@@ -1,13 +1,36 @@
 import {
+  type AdminProductRow,
+  MAX_FIT_LEN,
+  MAX_FIT_URL_LEN,
+  MAX_PRODUCT_DESCRIPTION_LEN,
+  MAX_PRODUCT_NAME_LEN,
+  MAX_SLUG_LEN,
   ORDER_STATUSES,
   type OrderListRow,
   type OrderStatus,
   type OrderWithItems,
+  PRODUCT_STATUSES,
+  type ProductWithSizes,
 } from "@attakk/types";
 import { html } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
 import { formatChf, formatTimestamp } from "./format.js";
 import type { Session } from "./session.js";
+
+// The fields of the product edit form, as strings: the values echoed back into
+// the inputs, whether they came from the stored product or a rejected submission.
+export type ProductFormValues = Record<
+  | "slug"
+  | "name"
+  | "description"
+  | "price_rappen"
+  | "fit"
+  | "fit_url"
+  | "min_orders"
+  | "status"
+  | "sort",
+  string
+>;
 
 // Server-rendered HTML, plain forms, no client framework and no build step — the
 // admin is presentation over the API. This is a deliberately spare shell; the
@@ -74,7 +97,9 @@ function shell(title: string, user: Session, body: Html): Html {
   return layout(
     title,
     html`<header>
-        <nav><a href="/orders">Orders</a></nav>
+        <nav>
+          <a href="/orders">Orders</a> · <a href="/products">Products</a>
+        </nav>
         <p>
           Signed in as <strong>${user.username}</strong>.
           <form method="post" action="/logout">
@@ -266,5 +291,226 @@ export function serviceErrorPage(user: Session) {
     user,
     html`<h1>Service unavailable</h1>
       <p>The API could not be reached. Try again in a moment.</p>`,
+  );
+}
+
+// ----------------------------------------------------------------- products
+
+// The flat product list, already ordered by the API as drop-then-product,
+// regrouped into its drops for display without re-sorting. Consecutive rows share
+// a drop, so a single pass collects each run.
+function byDrop(
+  products: AdminProductRow[],
+): { name: string; status: string; products: AdminProductRow[] }[] {
+  const groups: {
+    id: number;
+    name: string;
+    status: string;
+    products: AdminProductRow[];
+  }[] = [];
+  for (const p of products) {
+    const last = groups.at(-1);
+    if (last && last.id === p.drop_id) last.products.push(p);
+    else
+      groups.push({
+        id: p.drop_id,
+        name: p.drop_name,
+        status: p.drop_status,
+        products: [p],
+      });
+  }
+  return groups;
+}
+
+// The products screen: every product grouped by its drop, each row linking to its
+// edit page and showing status, price, and the ordered-units tally against the
+// pre-order target so it is clear how close a piece is to being made.
+export function productsPage(opts: {
+  user: Session;
+  products: AdminProductRow[];
+}) {
+  return shell(
+    "Products",
+    opts.user,
+    html`<h1>Products</h1>
+      ${
+        opts.products.length === 0
+          ? html`<p>No products yet.</p>`
+          : byDrop(opts.products).map(
+              (group) =>
+                html`<section>
+                  <h2>${group.name} <small>(${group.status})</small></h2>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th>Price</th>
+                        <th>Ordered</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${group.products.map(
+                        (p) =>
+                          html`<tr>
+                            <td><a href="/products/${p.id}">${p.name}</a></td>
+                            <td>${p.status}</td>
+                            <td>${chf(p.price_rappen)}</td>
+                            <td>${p.ordered_count} / ${p.min_orders}</td>
+                          </tr>`,
+                      )}
+                    </tbody>
+                  </table>
+                </section>`,
+            )
+      }`,
+  );
+}
+
+// One text/number field of the edit form, with its value echoed back and any
+// error shown beside it. Interpolated values are escaped by hono/html, so a
+// rejected value cannot inject markup when it is rendered back into the input.
+function textField(opts: {
+  label: string;
+  name: keyof ProductFormValues;
+  values: ProductFormValues;
+  errors?: Partial<Record<keyof ProductFormValues, string>>;
+  type?: "text" | "number";
+  required?: boolean;
+  maxlength?: number;
+  min?: number;
+  hint?: string;
+}): Html {
+  const err = opts.errors?.[opts.name];
+  return html`<p>
+    <label
+      >${opts.label}
+      <input
+        name="${opts.name}"
+        type="${opts.type ?? "text"}"
+        value="${opts.values[opts.name]}"
+        ${opts.required ? html`required` : html``}
+        ${opts.maxlength ? html`maxlength="${opts.maxlength}"` : html``}
+        ${opts.min !== undefined ? html`min="${opts.min}"` : html``}
+    /></label>
+    ${opts.hint ? html`<small>${opts.hint}</small>` : ""}
+    ${err ? html`<span role="alert">${err}</span>` : ""}
+  </p>`;
+}
+
+// The product edit form: the editable fields with the current values, a service-
+// side price hint in francs, and the product's sizes shown read-only for now (the
+// size editor and images land in later steps). `errors` marks a field the API or
+// the form rejected; `flash` confirms a save.
+export function productEditPage(opts: {
+  user: Session;
+  product: ProductWithSizes;
+  values: ProductFormValues;
+  errors?: Partial<Record<keyof ProductFormValues, string>>;
+  flash?: string;
+}) {
+  const { product, values, errors } = opts;
+  return shell(
+    product.name,
+    opts.user,
+    html`<p><a href="/products">← All products</a></p>
+      ${opts.flash ? html`<p role="status">${opts.flash}</p>` : ""}
+      <h1>${product.name}</h1>
+
+      <form method="post" action="/products/${product.id}">
+        ${textField({
+          label: "Slug",
+          name: "slug",
+          values,
+          errors,
+          required: true,
+          maxlength: MAX_SLUG_LEN,
+          hint: "Lowercase words joined by hyphens — the storefront URL.",
+        })}
+        ${textField({
+          label: "Name",
+          name: "name",
+          values,
+          errors,
+          required: true,
+          maxlength: MAX_PRODUCT_NAME_LEN,
+        })}
+        <p>
+          <label
+            >Description
+            <textarea
+              name="description"
+              rows="4"
+              maxlength="${MAX_PRODUCT_DESCRIPTION_LEN}"
+            >
+${values.description}</textarea>
+          </label>
+        </p>
+        ${textField({
+          label: "Price (rappen)",
+          name: "price_rappen",
+          values,
+          errors,
+          type: "number",
+          required: true,
+          min: 0,
+          hint: `100 rappen = CHF 1.00. Saved value: ${chf(product.price_rappen)}.`,
+        })}
+        ${textField({
+          label: "Fit",
+          name: "fit",
+          values,
+          errors,
+          maxlength: MAX_FIT_LEN,
+        })}
+        ${textField({
+          label: "Fit guide URL",
+          name: "fit_url",
+          values,
+          errors,
+          maxlength: MAX_FIT_URL_LEN,
+        })}
+        ${textField({
+          label: "Order target",
+          name: "min_orders",
+          values,
+          errors,
+          type: "number",
+          required: true,
+          min: 1,
+        })}
+        <p>
+          <label
+            >Status
+            <select name="status">
+              ${PRODUCT_STATUSES.map(
+                (s) =>
+                  html`<option
+                    value="${s}"
+                    ${values.status === s ? html`selected` : html``}
+                  >
+                    ${s}
+                  </option>`,
+              )}
+            </select></label
+          >
+        </p>
+        ${textField({
+          label: "Sort",
+          name: "sort",
+          values,
+          errors,
+          type: "number",
+          min: 0,
+        })}
+        <button type="submit">Save</button>
+      </form>
+
+      <h2>Sizes</h2>
+      ${
+        product.sizes.length === 0
+          ? html`<p>No sizes.</p>`
+          : html`<p>${product.sizes.map((s) => s.label).join(", ")}</p>`
+      }`,
   );
 }

@@ -4,10 +4,14 @@ import {
   ORDER_STATUSES,
   orderNoteInput,
   orderStatusInput,
+  productInput,
+  type AdminProductRow,
   type AdminUser,
   type OrderListRow,
   type OrderStatus,
   type OrderWithItems,
+  type Product,
+  type ProductWithSizes,
 } from "@attakk/types";
 import { type Context, Hono } from "hono";
 import { apiFetch, jsonBody } from "./api.js";
@@ -20,6 +24,9 @@ import {
   notFoundPage,
   orderDetailPage,
   ordersPage,
+  productEditPage,
+  type ProductFormValues,
+  productsPage,
   serviceErrorPage,
 } from "./views.js";
 
@@ -268,4 +275,199 @@ app.post("/orders/:id/resend", async (c) => {
   const r = await apiRequest(c, orderPath(id, "/resend"), { method: "POST" });
   if ("errorPage" in r) return r.errorPage;
   return c.redirect(`/orders/${id}?sent=1`);
+});
+
+// ------------------------------------------------------------ product screens
+
+// A write to the API from a product screen. Unlike apiRequest (which folds every
+// non-ok into the service page), a product write has expected 4xx the form must
+// show — a taken slug, a validation refusal — so those come back as a `conflict`
+// with the API's error code, while 404 and 5xx/unreachable are still the shared
+// pages. Kept beside apiRequest so each route reads as its own success path.
+async function apiWrite(
+  c: Context<AdminEnv>,
+  path: string,
+  init: RequestInit,
+): Promise<{ res: Response } | { errorPage: Response } | { conflict: string }> {
+  const user = c.get("user");
+  let res: Response;
+  try {
+    res = await apiFetch(path, init);
+  } catch {
+    return { errorPage: await c.html(serviceErrorPage(user), 502) };
+  }
+  if (res.ok) return { res };
+  if (res.status === 404) {
+    return { errorPage: await c.html(notFoundPage(user), 404) };
+  }
+  if (res.status === 400 || res.status === 409 || res.status === 422) {
+    const body = (await res.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    return { conflict: body?.error ?? "invalid" };
+  }
+  return { errorPage: await c.html(serviceErrorPage(user), 502) };
+}
+
+// The API path for one product, with the id encoded before it is spliced in.
+function productPath(id: string, suffix = ""): string {
+  return `/admin/products/${encodeURIComponent(id)}${suffix}`;
+}
+
+const PRODUCT_FIELDS = [
+  "slug",
+  "name",
+  "description",
+  "price_rappen",
+  "fit",
+  "fit_url",
+  "min_orders",
+  "status",
+  "sort",
+] as const;
+
+type ProductForm = Record<string, string | File>;
+
+function formStr(value: string | File | undefined): string {
+  return typeof value === "string" ? value : "";
+}
+
+// A form value bound for a zod number field: a numeric string becomes a number,
+// a blank one becomes undefined (so a required field is rejected and an optional
+// one takes its default), and anything else is passed through unchanged so zod
+// rejects it with a type error rather than the route silently coercing it.
+function formNum(value: string | File | undefined): unknown {
+  const s = formStr(value).trim();
+  if (s === "") return undefined;
+  const n = Number(s);
+  return Number.isNaN(n) ? s : n;
+}
+
+// The submitted fields as productInput expects them (numbers parsed), for the zod
+// check, and — separately — as strings, to echo back into the form on a reject.
+function productInputFromForm(form: ProductForm): unknown {
+  return {
+    slug: formStr(form.slug),
+    name: formStr(form.name),
+    description: formStr(form.description),
+    price_rappen: formNum(form.price_rappen),
+    fit: formStr(form.fit),
+    fit_url: formStr(form.fit_url),
+    min_orders: formNum(form.min_orders),
+    status: formStr(form.status),
+    sort: formNum(form.sort),
+  };
+}
+
+function formValues(form: ProductForm): ProductFormValues {
+  return Object.fromEntries(
+    PRODUCT_FIELDS.map((f) => [f, formStr(form[f])]),
+  ) as ProductFormValues;
+}
+
+function productValues(product: Product): ProductFormValues {
+  return {
+    slug: product.slug,
+    name: product.name,
+    description: product.description,
+    price_rappen: String(product.price_rappen),
+    fit: product.fit,
+    fit_url: product.fit_url,
+    min_orders: String(product.min_orders),
+    status: product.status,
+    sort: String(product.sort),
+  };
+}
+
+// Zod issues to a per-field message, first message per field wins. Only top-level
+// product fields carry issues here (productInput has no nested shapes), so the
+// path head is always a field name the form can mark.
+function fieldErrors(
+  issues: readonly { path: PropertyKey[]; message: string }[],
+): Partial<Record<keyof ProductFormValues, string>> {
+  const out: Partial<Record<keyof ProductFormValues, string>> = {};
+  for (const issue of issues) {
+    const key = issue.path[0];
+    if (typeof key === "string" && !(key in out)) {
+      out[key as keyof ProductFormValues] = issue.message;
+    }
+  }
+  return out;
+}
+
+// The API's write refusals mapped to a field message. slug_taken is the one an
+// edit can hit (the product exists and its drop is fixed); the rest are create or
+// size concerns, mapped defensively so an unexpected code still reads on the slug.
+function conflictErrors(
+  code: string,
+): Partial<Record<keyof ProductFormValues, string>> {
+  if (code === "slug_taken") {
+    return { slug: "That slug is already in use." };
+  }
+  return { slug: `The change was refused (${code}).` };
+}
+
+app.get("/products", async (c) => {
+  const r = await apiRequest(c, "/admin/products");
+  if ("errorPage" in r) return r.errorPage;
+  const products = (await r.res.json()) as AdminProductRow[];
+  return c.html(productsPage({ user: c.get("user"), products }));
+});
+
+app.get("/products/:id", async (c) => {
+  const r = await apiRequest(c, productPath(c.req.param("id")));
+  if ("errorPage" in r) return r.errorPage;
+  const product = (await r.res.json()) as ProductWithSizes;
+  const flash = c.req.query("saved") ? "Saved." : undefined;
+  return c.html(
+    productEditPage({
+      user: c.get("user"),
+      product,
+      values: productValues(product),
+      flash,
+    }),
+  );
+});
+
+// Save the product's fields. Validated with the same zod the API enforces; on a
+// bad body or a slug the API rejects, the form comes back with the values kept
+// and the error beside the field rather than dropping what was typed. On success,
+// redirect to the product (POST-then-redirect) with a saved flash.
+app.post("/products/:id", async (c) => {
+  const id = c.req.param("id");
+  const form = await c.req.parseBody();
+  const parsed = productInput.safeParse(productInputFromForm(form));
+
+  // Re-render the edit page with the submitted values and the given field errors.
+  // The product is re-read for its heading, price hint and sizes; the form shows
+  // what was typed, not the stored values.
+  const reject = async (
+    errors: Partial<Record<keyof ProductFormValues, string>>,
+    status: 400 | 409,
+  ): Promise<Response> => {
+    const r = await apiRequest(c, productPath(id));
+    if ("errorPage" in r) return r.errorPage;
+    const product = (await r.res.json()) as ProductWithSizes;
+    return c.html(
+      productEditPage({
+        user: c.get("user"),
+        product,
+        values: formValues(form),
+        errors,
+      }),
+      status,
+    );
+  };
+
+  if (!parsed.success) return reject(fieldErrors(parsed.error.issues), 400);
+
+  const w = await apiWrite(c, productPath(id), jsonBody("PATCH", parsed.data));
+  if ("errorPage" in w) return w.errorPage;
+  if ("conflict" in w) {
+    return reject(
+      conflictErrors(w.conflict),
+      w.conflict === "slug_taken" ? 409 : 400,
+    );
+  }
+  return c.redirect(`/products/${id}?saved=1`);
 });
