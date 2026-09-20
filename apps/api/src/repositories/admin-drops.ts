@@ -1,11 +1,11 @@
-import type { Drop, DropInput } from "@attakk/types";
+import type { Drop, DropInput, DropStatus } from "@attakk/types";
 import { db } from "../db.js";
 
-// The admin's drop reads. Where the storefront catalogue returns only live drops
-// (and their products), the admin sees every drop regardless of status — it edits
-// drafts and archives them — so nothing here is filtered. This is the read the
-// product create form needs to offer a drop to create into; drop editing and the
-// archive control land in the drops step. All SQL lives here.
+// The admin's drop reads and writes. Where the storefront catalogue returns only
+// live drops (and their products), the admin sees every drop regardless of status
+// — it edits drafts and archives them — so nothing here is filtered. The reads
+// back the drops list and the edit form; the writes are create, edit and the
+// archive control (a status flip). All SQL lives here.
 
 // Explicit column list (not SELECT *) so the response shape is a deliberate
 // contract. A copy of the catalogue's list, but without the p-prefix and status
@@ -111,5 +111,23 @@ export function updateDrop(id: number, input: DropInput): Drop | undefined {
     if (isUniqueViolation(err)) throw new DropError("slug_taken");
     throw err;
   }
+  return getDropForAdmin(id);
+}
+
+const setDropStatusStmt = db.prepare(
+  `UPDATE drops SET status = @status WHERE id = @id`,
+);
+
+// Move a drop between draft, live and archived — the archive control the drops
+// list saves on change, without opening the edit form. Reversible: only the
+// status column changes, so archiving and un-archiving leave every other field
+// (and every order for the drop) untouched. Returns undefined when no such drop
+// exists, so the route 404s. No slug clash is possible, so no DropError here.
+export function setDropStatus(
+  id: number,
+  status: DropStatus,
+): Drop | undefined {
+  if (dropByIdStmt.get(id) === undefined) return undefined;
+  setDropStatusStmt.run({ id, status });
   return getDropForAdmin(id);
 }

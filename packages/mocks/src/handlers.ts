@@ -1,5 +1,6 @@
 import {
   dropInput,
+  dropStatusInput,
   loginInput,
   ORDER_STATUSES,
   orderInput,
@@ -189,6 +190,23 @@ export const handlers = [
       return HttpResponse.json({ error: "slug_taken" }, { status: 409 });
     }
     return HttpResponse.json({ ...drop, ...parsed.data });
+  }),
+
+  // The archive control: flip a drop's status. A missing drop is a 404, a bad
+  // status a 400; on success the drop comes back with the new status, the same as
+  // the API. Registered with the other admin/drops writes, before */drops/:slug.
+  http.patch("*/admin/drops/:id/status", async ({ params, request }) => {
+    const drop = dropsById.get(Number(params.id));
+    if (!drop) {
+      return HttpResponse.json({ error: "not_found" }, { status: 404 });
+    }
+    const parsed = dropStatusInput.safeParse(
+      await request.json().catch(() => null),
+    );
+    if (!parsed.success) {
+      return HttpResponse.json({ error: "invalid" }, { status: 400 });
+    }
+    return HttpResponse.json({ ...drop, status: parsed.data.status });
   }),
 
   http.get("*/drops", () => HttpResponse.json(liveDrops)),

@@ -265,6 +265,21 @@ test("PATCH /admin/drops/:id mirrors the API's edit branches", async () => {
   );
 });
 
+test("PATCH /admin/drops/:id/status flips status and mirrors the API's 400/404", async () => {
+  const ok = await patch("/admin/drops/1/status", { status: "archived" });
+  assert.equal(ok.status, 200);
+  assert.equal(((await ok.json()) as { status: string }).status, "archived");
+
+  assert.equal(
+    (await patch("/admin/drops/1/status", { status: "sold" })).status,
+    400,
+  );
+  assert.equal(
+    (await patch("/admin/drops/999/status", { status: "live" })).status,
+    404,
+  );
+});
+
 test("GET /admin/products lists the rows and 404s an unknown detail id", async () => {
   const list = await fetch(`${base}/admin/products`);
   assert.equal(list.status, 200);

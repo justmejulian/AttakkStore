@@ -1,21 +1,22 @@
-import { dropInput } from "@attakk/types";
+import { dropInput, dropStatusInput } from "@attakk/types";
 import { type Context, Hono } from "hono";
 import {
   createDrop,
   DropError,
   getDropForAdmin,
   listDropsForAdmin,
+  setDropStatus,
   updateDrop,
 } from "../repositories/admin-drops.js";
 import { parseId } from "./params.js";
 
 // The admin's drop screens, reached over the internal network: the list of every
 // drop, any status (the product create form reads it to offer a drop to create
-// into), one drop for the edit form, plus create and edit. The archive control is
-// a status change, which edit already carries; a dedicated status endpoint lands
-// in the next commit. Like the other admin routes it carries no auth of its own;
-// the session gate is the admin app's and the private network is the boundary. No
-// SQL here; the repository owns it.
+// into), one drop for the edit form, create and edit, and the archive control — a
+// single-field status flip the drops list saves on change (the full edit carries
+// status too, but the dropdown does not open the form). Like the other admin
+// routes it carries no auth of its own; the session gate is the admin app's and
+// the private network is the boundary. No SQL here; the repository owns it.
 export const adminDrops = new Hono();
 
 // Turn a repository DropError into the 4xx it maps to: a slug already in use is a
@@ -70,4 +71,20 @@ adminDrops.patch("/admin/drops/:id", async (c) => {
   } catch (err) {
     return dropError(c, err);
   }
+});
+
+// The archive control: flip a drop's status without the full edit form, so the
+// drops list's status dropdown can save on change. A missing drop is a 404, a bad
+// status a 400; on success the updated drop comes back.
+adminDrops.patch("/admin/drops/:id/status", async (c) => {
+  const id = parseId(c.req.param("id"));
+  if (id === null) return c.json({ error: "not_found" }, 404);
+  const parsed = dropStatusInput.safeParse(
+    await c.req.json().catch(() => null),
+  );
+  if (!parsed.success) return c.json({ error: "invalid" }, 400);
+
+  const drop = setDropStatus(id, parsed.data.status);
+  if (!drop) return c.json({ error: "not_found" }, 404);
+  return c.json(drop);
 });

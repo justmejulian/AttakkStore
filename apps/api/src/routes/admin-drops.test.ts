@@ -129,3 +129,32 @@ test("PATCH /admin/drops/:id is 409 for another drop's slug, 404 for a missing d
   const missing = await patch("/admin/drops/999", dropBody("whatever"));
   assert.equal(missing.status, 404);
 });
+
+test("PATCH /admin/drops/:id/status flips the status and is reversible", async () => {
+  // Drop 1 is the seeded live Redline; archive it, then bring it back — only the
+  // status changes, nothing else about the drop.
+  const before = (await (
+    await adminDrops.request("/admin/drops/1")
+  ).json()) as Drop;
+
+  const archived = await patch("/admin/drops/1/status", { status: "archived" });
+  assert.equal(archived.status, 200);
+  assert.equal(((await archived.json()) as Drop).status, "archived");
+
+  const live = await patch("/admin/drops/1/status", { status: "live" });
+  const restored = (await live.json()) as Drop;
+  assert.equal(restored.status, "live");
+  // Un-archiving restored the drop exactly — the flip touched only status.
+  assert.deepEqual(restored, before);
+});
+
+test("PATCH /admin/drops/:id/status is 400 for a bad status and 404 for a missing drop", async () => {
+  assert.equal(
+    (await patch("/admin/drops/1/status", { status: "sold" })).status,
+    400,
+  );
+  assert.equal(
+    (await patch("/admin/drops/999/status", { status: "live" })).status,
+    404,
+  );
+});

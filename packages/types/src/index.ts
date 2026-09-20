@@ -286,6 +286,16 @@ export const dropInput = z.object({
 });
 export type DropInput = z.infer<typeof dropInput>;
 
+// The archive control: the drops list has a status dropdown that saves on change,
+// so a single-field write moves a drop between draft, live and archived without
+// opening the edit form. Archiving is reversible — nothing else about the drop or
+// its orders changes — which is why it is just a status flip (same shape
+// orderStatusInput gives orders).
+export const dropStatusInput = z.object({
+  status: z.enum(DROP_STATUSES),
+});
+export type DropStatusInput = z.infer<typeof dropStatusInput>;
+
 /* ------------------------------------------------------------------ orders */
 
 // The three states an order moves through. Declared as one tuple so the type,
