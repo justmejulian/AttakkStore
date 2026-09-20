@@ -42,6 +42,16 @@ export function hashPassword(password: string): string {
   return `scrypt$${N}$${R}$${P}$${salt.toString("hex")}$${key.toString("hex")}`;
 }
 
+// The request-path variant: creating an admin user happens inside a route
+// handler, and this process also serves the shop's reads and checkout, so the
+// scrypt work runs off the event loop rather than stalling every concurrent
+// request for its duration — the same reason verifyPassword is async.
+export async function hashPasswordAsync(password: string): Promise<string> {
+  const salt = randomBytes(16);
+  const key = await scryptDerive(password, salt, KEYLEN, { N, r: R, p: P });
+  return `scrypt$${N}$${R}$${P}$${salt.toString("hex")}$${key.toString("hex")}`;
+}
+
 // Async so the scrypt work runs off the event loop: the login route awaits this,
 // and the API process it runs in also serves the shop's reads and checkout, so a
 // synchronous scrypt would stall every concurrent request for its duration.

@@ -4,6 +4,8 @@ import {
   adminCredentials,
   adminDrops,
   adminUser,
+  adminUserDeactivated,
+  adminUsers,
   allDrops,
   createdOrder,
   duplicateVariantRejection,
@@ -37,6 +39,7 @@ const { admin } = await import("./routes/admin.js");
 const { adminProducts } = await import("./routes/admin-products.js");
 const { adminDrops: adminDropsRoute } = await import("./routes/admin-drops.js");
 const { adminSettings } = await import("./routes/admin-settings.js");
+const { adminUsers: adminUsersRoute } = await import("./routes/admin-users.js");
 
 after(() => cleanup());
 
@@ -92,25 +95,26 @@ function seedFromFixtures(database: Database): void {
   seed();
 }
 
-// Seed the admin fixture as a real row: its public fields verbatim, plus a fresh
-// scrypt hash of the fixture password. The hash is generated here rather than
-// fixed because a stored hash carries a random salt — what the login must match
-// is the password, which the real verify then checks against this hash.
+// Seed the admin fixtures as real rows: their public fields verbatim, plus a
+// scrypt hash. adminUser's hash is a fresh one of the fixture password — the hash
+// is generated here rather than fixed because it carries a random salt, and what
+// login must match is the password, which the real verify checks against it. The
+// deactivated user's password is never verified, so any hash does. Seeding both
+// lets GET /admin/users prove its list against the adminUsers fixture.
 function seedAdminUser(database: Database): void {
-  database
-    .prepare(
-      `INSERT INTO admin_users
-         (id, username, password_hash, active, created_at, last_login_at)
-       VALUES (@id, @username, @password_hash, @active, @created_at, @last_login_at)`,
-    )
-    .run({
-      id: adminUser.id,
-      username: adminUser.username,
-      password_hash: hashPassword(adminCredentials.password),
-      active: adminUser.active,
-      created_at: adminUser.created_at,
-      last_login_at: adminUser.last_login_at,
-    });
+  const insert = database.prepare(
+    `INSERT INTO admin_users
+       (id, username, password_hash, active, created_at, last_login_at)
+     VALUES (@id, @username, @password_hash, @active, @created_at, @last_login_at)`,
+  );
+  insert.run({
+    ...adminUser,
+    password_hash: hashPassword(adminCredentials.password),
+  });
+  insert.run({
+    ...adminUserDeactivated,
+    password_hash: hashPassword("unused-fixture-password"),
+  });
 }
 
 // Seed the settings table from the fixture, one row per Settings field, so the
@@ -183,6 +187,22 @@ test("POST /orders rejects the fixture carts with the fixture status and code", 
     const body = (await res.json()) as { error: string };
     assert.equal(body.error, rejection.error);
   }
+});
+
+test("GET /admin/users returns the admin users fixture verbatim", async () => {
+  // Both admin rows are seeded above, so the real list — public shape (no hash),
+  // ordered by username — must match the adminUsers fixture the mock hands back.
+  // The login test (which may run either side of this one) stamps adminUser's
+  // last_login_at on the shared seeded row, so that one field is normalised back
+  // to the fixture's null before comparing; every other field, and editor (id 2)
+  // whole, is asserted byte for byte.
+  const res = await adminUsersRoute.request("/admin/users");
+  assert.equal(res.status, 200);
+  const users = (await res.json()) as typeof adminUsers;
+  assert.deepEqual(
+    users.map((u) => (u.id === 1 ? { ...u, last_login_at: null } : u)),
+    adminUsers,
+  );
 });
 
 test("POST /admin/login returns the user fixture on the right credentials", async () => {

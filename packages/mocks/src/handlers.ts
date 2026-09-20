@@ -1,4 +1,6 @@
 import {
+  adminActiveInput,
+  adminUserCreateInput,
   dropInput,
   dropStatusInput,
   loginInput,
@@ -17,6 +19,7 @@ import {
   adminDrops,
   adminProducts,
   adminUser,
+  adminUsers,
   allDrops,
   allOrders,
   createdOrder,
@@ -140,6 +143,14 @@ function isOrderStatus(value: string): boolean {
 // The API stamps the real time; the mock is stateless, so it returns this fixed,
 // obviously-synthetic value instead — distinct from any fixture's own paid_at.
 const MOCK_PAID_STAMP = "2026-01-05T00:00:00.000Z";
+
+// The admin users by id (the deactivate/restore handler keys off this), the taken
+// usernames (a create with one is a 409), and how many are active — deactivating
+// the last active admin is refused, the same last_admin guard the API enforces.
+const adminUsersById = new Map(adminUsers.map((u) => [u.id, u] as const));
+const adminUsernames = new Set(adminUsers.map((u) => u.username));
+const activeAdminCount = adminUsers.filter((u) => u.active === 1).length;
+const MOCK_NEW_ADMIN_USER_ID = 700;
 
 export const handlers = [
   // Registered before */drops for the same MSW *-wildcard reason as admin
@@ -461,5 +472,55 @@ export const handlers = [
       );
     }
     return HttpResponse.json(parsed.data);
+  }),
+
+  // The Users screen: list admins, create one, deactivate or restore one. Create
+  // validates with the real adminUserCreateInput, so a too-short password or blank
+  // username is a 400 exactly as the API rejects it, and a taken username a 409;
+  // the new row carries a synthetic id. Deactivate/restore keys off the fixtures
+  // by id, 404s an unknown one, and refuses to switch off the last active admin
+  // with the same last_admin 409 the API's guard returns.
+  http.get("*/admin/users", () => HttpResponse.json(adminUsers)),
+
+  http.post("*/admin/users", async ({ request }) => {
+    const parsed = adminUserCreateInput.safeParse(
+      await request.json().catch(() => null),
+    );
+    if (!parsed.success) {
+      return HttpResponse.json(
+        { error: "invalid", issues: parsed.error.issues },
+        { status: 400 },
+      );
+    }
+    if (adminUsernames.has(parsed.data.username)) {
+      return HttpResponse.json({ error: "username_taken" }, { status: 409 });
+    }
+    return HttpResponse.json(
+      {
+        id: MOCK_NEW_ADMIN_USER_ID,
+        username: parsed.data.username,
+        active: 1,
+        created_at: "2026-04-01T00:00:00.000Z",
+        last_login_at: null,
+      },
+      { status: 201 },
+    );
+  }),
+
+  http.patch("*/admin/users/:id/active", async ({ params, request }) => {
+    const user = adminUsersById.get(Number(params.id));
+    if (!user)
+      return HttpResponse.json({ error: "not_found" }, { status: 404 });
+    const parsed = adminActiveInput.safeParse(
+      await request.json().catch(() => null),
+    );
+    if (!parsed.success) {
+      return HttpResponse.json({ error: "invalid" }, { status: 400 });
+    }
+    const { active } = parsed.data;
+    if (!active && user.active === 1 && activeAdminCount <= 1) {
+      return HttpResponse.json({ error: "last_admin" }, { status: 409 });
+    }
+    return HttpResponse.json({ ...user, active: active ? 1 : 0 });
   }),
 ];

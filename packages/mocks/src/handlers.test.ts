@@ -6,6 +6,7 @@ import {
   adminDrops,
   adminProducts,
   adminUser,
+  adminUsers,
   createdOrder,
   jerseyProduct,
   liveDrops,
@@ -421,6 +422,53 @@ test("image write routes return the stored row and an empty 204", async () => {
   const removed = await fetch(`${base}/images/5`, { method: "DELETE" });
   assert.equal(removed.status, 204);
   assert.equal(await removed.text(), "");
+});
+
+test("admin users list, create and deactivate mirror the API", async () => {
+  const list = await fetch(`${base}/admin/users`);
+  assert.equal(list.status, 200);
+  assert.deepEqual(await list.json(), adminUsers);
+
+  // Create: a clean body is a 201, a taken username a 409, a short password a 400.
+  const created = await post("/admin/users", {
+    username: "newbie",
+    password: "brand-new-password",
+  });
+  assert.equal(created.status, 201);
+  assert.equal(
+    ((await created.json()) as { username: string }).username,
+    "newbie",
+  );
+  assert.equal(
+    (await post("/admin/users", { username: "admin", password: "another-one" }))
+      .status,
+    409,
+  );
+  assert.equal(
+    (await post("/admin/users", { username: "z", password: "short" })).status,
+    400,
+  );
+
+  // Deactivate/restore: an unknown id 404s; admin is the only active user, so
+  // switching it off is the last_admin 409; the inactive editor restores fine; a
+  // bad body is a 400 — the API's codes.
+  assert.equal(
+    (await patch("/admin/users/9999/active", { active: false })).status,
+    404,
+  );
+  const lastAdmin = await patch("/admin/users/1/active", { active: false });
+  assert.equal(lastAdmin.status, 409);
+  assert.equal(
+    ((await lastAdmin.json()) as { error: string }).error,
+    "last_admin",
+  );
+  const restore = await patch("/admin/users/2/active", { active: true });
+  assert.equal(restore.status, 200);
+  assert.equal(((await restore.json()) as { active: number }).active, 1);
+  assert.equal(
+    (await patch("/admin/users/2/active", { active: "nope" })).status,
+    400,
+  );
 });
 
 test("settings read returns the fixture and a bad IBAN is a 400", async () => {

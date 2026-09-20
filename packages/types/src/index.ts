@@ -444,6 +444,24 @@ export interface AdminUser {
   last_login_at: string | null;
 }
 
+// What an admin posts to create another admin user. Unlike loginInput, the
+// password holds to MIN_PASSWORD_LEN, not just a non-empty length: login must
+// verify whatever hash was already stored, but here a new password is being set,
+// so it takes the same floor the seed CLI enforces — a user created this way is
+// one that login will later accept. The API hashes the password; it never reaches
+// the database in the clear and never leaves in a response.
+export const adminUserCreateInput = z.object({
+  username: z.string().trim().min(1).max(MAX_USERNAME_LEN),
+  password: z.string().min(MIN_PASSWORD_LEN).max(MAX_PASSWORD_LEN),
+});
+export type AdminUserCreateInput = z.infer<typeof adminUserCreateInput>;
+
+// The active flag an admin flips to deactivate or restore another user. `active`
+// is a flag rather than a delete, so a deactivated admin's past actions stay
+// attributable; the flip is reversible, so both directions share this one shape.
+export const adminActiveInput = z.object({ active: z.boolean() });
+export type AdminActiveInput = z.infer<typeof adminActiveInput>;
+
 /* ------------------------------------------------------------- settings */
 
 // The settings table is a flat key/value store the admin's Settings screen

@@ -6,6 +6,7 @@ import { adminDrops } from "./routes/admin-drops.js";
 import { adminOrders } from "./routes/admin-orders.js";
 import { adminProducts } from "./routes/admin-products.js";
 import { adminSettings } from "./routes/admin-settings.js";
+import { adminUsers } from "./routes/admin-users.js";
 import { catalog } from "./routes/catalog.js";
 import { images } from "./routes/images.js";
 import { orders } from "./routes/orders.js";
@@ -59,6 +60,10 @@ app.route("/", adminDrops);
 // The admin's Settings screen: read and save shop-open, the QR-bill creditor and
 // the notification address. Internal only.
 app.route("/", adminSettings);
+
+// The admin's Users screen: list admins, create another, deactivate or restore
+// one. Internal only.
+app.route("/", adminUsers);
 
 serve({ fetch: app.fetch, port: PORT }, ({ port }) => {
   console.log(`api listening on :${port}`);

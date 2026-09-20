@@ -4,7 +4,10 @@ import {
   MIN_PASSWORD_LEN,
 } from "@attakk/types";
 import { hashPassword } from "../password.js";
-import { createAdminUser } from "../repositories/admin-users.js";
+import {
+  AdminUserError,
+  createAdminUser,
+} from "../repositories/admin-users.js";
 
 // Creates an admin user from the command line — the only way the first admin is
 // made, since there is no signup screen. After this one, an existing admin adds
@@ -143,9 +146,9 @@ try {
   console.log(`created admin user ${user.username} (#${user.id})`);
   process.exit(0);
 } catch (err) {
-  // username is UNIQUE; a duplicate is the one error worth naming plainly rather
-  // than dumping a SqliteError at whoever is setting the server up.
-  if (err instanceof Error && err.message.includes("UNIQUE")) {
+  // A duplicate username is the one error worth naming plainly rather than
+  // dumping a stack at whoever is setting the server up.
+  if (err instanceof AdminUserError && err.code === "username_taken") {
     fail(`an admin user named ${username} already exists`);
   }
   throw err;

@@ -375,6 +375,22 @@ export const adminCredentials = {
   password: "correct-horse-battery-staple",
 };
 
+// A second, deactivated admin, so the Users list has a switched-off row to show
+// and the deactivate/restore control something other than the sole active admin
+// to act on. The API's contract test seeds this alongside adminUser, so the
+// mock's list matches the real GET /admin/users byte for byte.
+export const adminUserDeactivated: AdminUser = {
+  id: 2,
+  username: "editor",
+  active: 0,
+  created_at: "2026-02-01T00:00:00.000Z",
+  last_login_at: "2026-03-01T09:00:00.000Z",
+};
+
+// The Users list, ordered by username the way listAdminUsers orders it
+// ("admin" before "editor"), so the mock's GET /admin/users matches the API's.
+export const adminUsers: AdminUser[] = [adminUser, adminUserDeactivated];
+
 // The settings the admin's Settings screen reads: shop open, a fully configured
 // creditor and a notification address. The IBAN is a checksum-valid standard CH
 // account, so a round-trip through the real settingsInput leaves it unchanged.
