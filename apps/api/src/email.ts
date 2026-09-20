@@ -4,6 +4,7 @@ import type { SendMailOptions } from "nodemailer/lib/mailer";
 import { getCreditor } from "./creditor.js";
 import { chf } from "./money.js";
 import { generateQrBill } from "./qrbill.js";
+import { getSetting, SETTINGS_KEYS } from "./repositories/settings.js";
 
 // The confirmation email. Once an order is created the customer is sent their
 // QR bill as a PDF attachment with the pickup wording, and the shop gets a
@@ -27,20 +28,24 @@ export interface EmailConfig {
 
 // Read the mailer config from the environment, or null when an essential field
 // is missing so the caller skips sending instead of throwing. Port defaults to
-// 465 (implicit TLS), and the notification address falls back to the sender so
-// a configured shop always gets its own copy.
+// 465 (implicit TLS). The notification address is the admin's Settings value
+// first — the shop edits where its heads-up goes without a redeploy — then the
+// NOTIFY_EMAIL env var, and finally the sender, so a configured shop always gets
+// its own copy. The SMTP secrets stay in the environment (never the DB); only
+// the recipient is a setting.
 export function emailConfigFromEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): EmailConfig | null {
   const { SMTP_HOST, SMTP_USER, SMTP_PASS, SMTP_FROM } = env;
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS || !SMTP_FROM) return null;
+  const notifySetting = getSetting(SETTINGS_KEYS.notify_email);
   return {
     host: SMTP_HOST,
     port: Number(env.SMTP_PORT || 465),
     user: SMTP_USER,
     pass: SMTP_PASS,
     from: SMTP_FROM,
-    notifyTo: env.NOTIFY_EMAIL || SMTP_FROM,
+    notifyTo: notifySetting || env.NOTIFY_EMAIL || SMTP_FROM,
   };
 }
 

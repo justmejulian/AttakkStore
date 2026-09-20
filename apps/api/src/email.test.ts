@@ -5,7 +5,7 @@ import { openTempApi } from "./test-support.js";
 
 // email.ts pulls in the creditor reader, which prepares a statement against the
 // db singleton at import time, so open a throwaway database before importing.
-const { cleanup } = await openTempApi();
+const { db, cleanup } = await openTempApi();
 const {
   buildConfirmationEmail,
   buildNotificationEmail,
@@ -91,6 +91,28 @@ test("uses NOTIFY_EMAIL for the notification address when set", () => {
     NOTIFY_EMAIL: "orders@example.com",
   });
   assert.equal(cfg?.notifyTo, "orders@example.com");
+});
+
+test("the notify_email setting wins over NOTIFY_EMAIL and the sender", () => {
+  // The Settings screen is where the shop edits its notification address, so a
+  // stored value takes precedence over the env fallback and the sender.
+  db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(
+    "notify_email",
+    "chosen@example.com",
+  );
+  try {
+    const cfg = emailConfigFromEnv({
+      SMTP_HOST: "mail.example.com",
+      SMTP_USER: "u",
+      SMTP_PASS: "p",
+      SMTP_FROM: "shop@example.com",
+      NOTIFY_EMAIL: "orders@example.com",
+    });
+    assert.equal(cfg?.notifyTo, "chosen@example.com");
+  } finally {
+    // Leave the table as we found it so later tests see an unset notify_email.
+    db.prepare("DELETE FROM settings WHERE key = ?").run("notify_email");
+  }
 });
 
 test("confirmation email goes to the customer with the QR bill attached", () => {

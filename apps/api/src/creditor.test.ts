@@ -6,7 +6,8 @@ import { openTempApi } from "./test-support.js";
 // settings repository, which prepares its statement against the singleton at
 // import time.
 const { db, cleanup } = await openTempApi();
-const { CREDITOR_KEYS, getCreditor } = await import("./creditor.js");
+const { getCreditor } = await import("./creditor.js");
+const { SETTINGS_KEYS } = await import("./repositories/settings.js");
 
 after(() => cleanup());
 
@@ -23,8 +24,8 @@ test("falls back to placeholders when nothing is configured", () => {
 });
 
 test("reads configured fields and keeps placeholders for the rest", () => {
-  setStmt.run(CREDITOR_KEYS.name, "ATTAKK Collective");
-  setStmt.run(CREDITOR_KEYS.account, "CH5604835012345678009");
+  setStmt.run(SETTINGS_KEYS.creditor_name, "ATTAKK Collective");
+  setStmt.run(SETTINGS_KEYS.creditor_account, "CH5604835012345678009");
 
   const creditor = getCreditor();
   assert.equal(creditor.name, "ATTAKK Collective"); // configured
@@ -35,6 +36,6 @@ test("reads configured fields and keeps placeholders for the rest", () => {
 test("treats a blank stored field as unset, not an empty value", () => {
   // A row saved as '' is a blank field, not a configured one; it must fall back
   // to the placeholder rather than reach swissqrbill as an empty required field.
-  setStmt.run(CREDITOR_KEYS.name, "");
+  setStmt.run(SETTINGS_KEYS.creditor_name, "");
   assert.equal(getCreditor().name, "ATTAKK");
 });

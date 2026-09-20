@@ -11,6 +11,7 @@ import {
   liveDrops,
   orderListRows,
   paidOrder,
+  settings,
   uploadedImage,
 } from "./fixtures.js";
 import { handlers } from "./handlers.js";
@@ -420,4 +421,20 @@ test("image write routes return the stored row and an empty 204", async () => {
   const removed = await fetch(`${base}/images/5`, { method: "DELETE" });
   assert.equal(removed.status, 204);
   assert.equal(await removed.text(), "");
+});
+
+test("settings read returns the fixture and a bad IBAN is a 400", async () => {
+  const read = await fetch(`${base}/admin/settings`);
+  assert.equal(read.status, 200);
+  assert.deepEqual(await read.json(), settings);
+
+  // A valid save echoes the normalised object back; a bad IBAN is a 400, exactly
+  // as the API's settingsInput rejects it.
+  const ok = await put("/admin/settings", settings);
+  assert.equal(ok.status, 200);
+  const bad = await put("/admin/settings", {
+    ...settings,
+    creditor_account: "CH5604835012345678000",
+  });
+  assert.equal(bad.status, 400);
 });

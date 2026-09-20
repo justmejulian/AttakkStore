@@ -443,3 +443,109 @@ export interface AdminUser {
   // then stamps the new time — so it is null for a user who has never logged in.
   last_login_at: string | null;
 }
+
+/* ------------------------------------------------------------- settings */
+
+// The settings table is a flat key/value store the admin's Settings screen
+// writes: whether the shop takes orders, the creditor the QR bill is paid to,
+// and the address a new-order notification goes to. One shape here so the API,
+// the admin form and the storefront agree on the keys and what a valid value is.
+// The keys are the storage keys, so a Settings object maps one-to-one onto rows.
+export interface Settings {
+  shop_open: boolean;
+  creditor_name: string;
+  creditor_address: string;
+  creditor_building_number: string;
+  creditor_zip: string;
+  creditor_city: string;
+  creditor_country: string;
+  creditor_account: string;
+  notify_email: string;
+}
+
+// The creditor block's caps mirror the Swiss QR-bill's own limits, so a value
+// the form accepts is one swissqrbill will also accept rather than reject at bill
+// time.
+export const MAX_CREDITOR_NAME_LEN = 70;
+export const MAX_CREDITOR_ADDRESS_LEN = 70;
+export const MAX_CREDITOR_BUILDING_NUMBER_LEN = 16;
+export const MAX_CREDITOR_ZIP_LEN = 16;
+export const MAX_CREDITOR_CITY_LEN = 35;
+
+// A Swiss QR bill is paid to a CH or LI account, so a stored IBAN must carry one
+// of those country codes, be the right length (21 characters) and pass the ISO
+// 7064 mod-97-10 checksum. A typo here prints bills nobody can pay and you would
+// only hear about it from a customer, so it is checked before it is ever saved.
+// Blank is allowed and means "not configured" — the API falls back to a
+// placeholder creditor so a bill can still be generated in dev; this rejects
+// only a non-blank value that is wrong. Pass a normalised value (no spaces,
+// upper case); it normalises internally too so a raw form value is fine.
+//
+// A QR-IBAN — one whose bank IID (positions 5–9) falls in 30000–31999 — is
+// rejected too, even with a valid checksum. Our bills carry an RF creditor
+// reference, and swissqrbill forces a QR-IBAN to use a QR reference instead: a
+// QR-IBAN would throw at every bill generation, silently dropping the customer's
+// confirmation. Since Swiss businesses very often *have* a QR-IBAN, pasting the
+// real one is the likeliest mistake, so it is caught here rather than at send.
+export function isValidIban(value: string): boolean {
+  const iban = value.replace(/\s+/g, "").toUpperCase();
+  if (!/^(CH|LI)[0-9]{2}[0-9A-Z]{17}$/.test(iban)) return false;
+  const iid = Number(iban.slice(4, 9));
+  if (iid >= 30000 && iid <= 31999) return false;
+  // Move the four leading characters to the end, expand letters to numbers
+  // (A=10 … Z=35), then reduce mod 97 one character at a time so the running
+  // value never overflows a JS number. A valid IBAN leaves a remainder of 1.
+  const rearranged = iban.slice(4) + iban.slice(0, 4);
+  let remainder = 0;
+  for (const ch of rearranged) {
+    const digits = ch >= "0" && ch <= "9" ? ch : String(ch.charCodeAt(0) - 55);
+    remainder = Number(String(remainder) + digits) % 97;
+  }
+  return remainder === 1;
+}
+
+// What the admin posts to the API's settings route, validated with the same zod
+// the admin form uses so the two agree on what is valid. Every creditor field
+// may be blank — an unconfigured shop falls back to a placeholder creditor — but
+// a non-blank IBAN, country and notification email are checked. The IBAN is
+// normalised (spaces stripped, upper-cased) as it is validated so what lands in
+// the settings row is what swissqrbill wants.
+export const settingsInput = z.object({
+  shop_open: z.boolean(),
+  creditor_name: z.string().trim().max(MAX_CREDITOR_NAME_LEN).default(""),
+  creditor_address: z.string().trim().max(MAX_CREDITOR_ADDRESS_LEN).default(""),
+  creditor_building_number: z
+    .string()
+    .trim()
+    .max(MAX_CREDITOR_BUILDING_NUMBER_LEN)
+    .default(""),
+  creditor_zip: z.string().trim().max(MAX_CREDITOR_ZIP_LEN).default(""),
+  creditor_city: z.string().trim().max(MAX_CREDITOR_CITY_LEN).default(""),
+  // The creditor is the shop, which is in Switzerland, so the country is CH (or
+  // blank, meaning fall back to the placeholder). A free two-letter field would
+  // let a typo like "ZZ" through the checksum-valid IBAN check only to have
+  // swissqrbill reject the non-ISO country at bill time, silently dropping the
+  // confirmation — the same failure the QR-IBAN guard closes.
+  creditor_country: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .refine((s) => s === "" || s === "CH", "invalid_country")
+    .default(""),
+  creditor_account: z
+    .string()
+    .trim()
+    .transform((s) => s.replace(/\s+/g, "").toUpperCase())
+    .refine((s) => s === "" || isValidIban(s), "invalid_iban")
+    .default(""),
+  notify_email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .refine(
+      (s) => s === "" || z.email().max(254).safeParse(s).success,
+      "invalid_email",
+    )
+    .default(""),
+});
+export type SettingsInput = z.infer<typeof settingsInput>;

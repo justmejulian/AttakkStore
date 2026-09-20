@@ -7,6 +7,7 @@ import type {
   OrderListRow,
   OrderWithItems,
   ProductImage,
+  Settings,
 } from "@attakk/types";
 
 // The canned API responses the shop and admin are built against, and the rows
@@ -372,4 +373,19 @@ export const adminUser: AdminUser = {
 export const adminCredentials = {
   username: "admin",
   password: "correct-horse-battery-staple",
+};
+
+// The settings the admin's Settings screen reads: shop open, a fully configured
+// creditor and a notification address. The IBAN is a checksum-valid standard CH
+// account, so a round-trip through the real settingsInput leaves it unchanged.
+export const settings: Settings = {
+  shop_open: true,
+  creditor_name: "ATTAKK Collective",
+  creditor_address: "Musterstrasse",
+  creditor_building_number: "1",
+  creditor_zip: "8000",
+  creditor_city: "Zürich",
+  creditor_country: "CH",
+  creditor_account: "CH5604835012345678009",
+  notify_email: "shop@attakk.example",
 };

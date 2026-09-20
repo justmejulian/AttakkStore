@@ -12,6 +12,7 @@ import {
   orderRequest,
   originsDrop,
   redlineDrop,
+  settings,
   unavailableProductRejection,
   type OrderRejection,
 } from "@attakk/mocks";
@@ -29,11 +30,13 @@ import { openTempApi } from "./test-support.js";
 const { db, cleanup } = await openTempApi();
 seedFromFixtures(db);
 seedAdminUser(db);
+seedSettings(db);
 const { catalog } = await import("./routes/catalog.js");
 const { orders } = await import("./routes/orders.js");
 const { admin } = await import("./routes/admin.js");
 const { adminProducts } = await import("./routes/admin-products.js");
 const { adminDrops: adminDropsRoute } = await import("./routes/admin-drops.js");
+const { adminSettings } = await import("./routes/admin-settings.js");
 
 after(() => cleanup());
 
@@ -108,6 +111,23 @@ function seedAdminUser(database: Database): void {
       created_at: adminUser.created_at,
       last_login_at: adminUser.last_login_at,
     });
+}
+
+// Seed the settings table from the fixture, one row per Settings field, so the
+// real GET /admin/settings reconstructs the same object the mock hands back.
+function seedSettings(database: Database): void {
+  const insert = database.prepare(
+    `INSERT INTO settings (key, value) VALUES (?, ?)`,
+  );
+  insert.run("shop_open", settings.shop_open ? "1" : "0");
+  insert.run("creditor_name", settings.creditor_name);
+  insert.run("creditor_address", settings.creditor_address);
+  insert.run("creditor_building_number", settings.creditor_building_number);
+  insert.run("creditor_zip", settings.creditor_zip);
+  insert.run("creditor_city", settings.creditor_city);
+  insert.run("creditor_country", settings.creditor_country);
+  insert.run("creditor_account", settings.creditor_account);
+  insert.run("notify_email", settings.notify_email);
 }
 
 test("GET /drops returns the live-collections fixture verbatim", async () => {
@@ -225,6 +245,14 @@ test("GET /admin/products/:id returns the product fixture verbatim", async () =>
   const res = await adminProducts.request("/admin/products/10");
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), jerseyProduct);
+});
+
+test("GET /admin/settings reconstructs the settings fixture verbatim", async () => {
+  // The rows seeded above are the mock's settings object, so the real route's
+  // read (shop_open as a boolean, every field as stored) must match it exactly.
+  const res = await adminSettings.request("/admin/settings");
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), settings);
 });
 
 function postOrder(body: unknown): Promise<Response> {

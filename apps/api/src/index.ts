@@ -5,6 +5,7 @@ import { admin } from "./routes/admin.js";
 import { adminDrops } from "./routes/admin-drops.js";
 import { adminOrders } from "./routes/admin-orders.js";
 import { adminProducts } from "./routes/admin-products.js";
+import { adminSettings } from "./routes/admin-settings.js";
 import { catalog } from "./routes/catalog.js";
 import { images } from "./routes/images.js";
 import { orders } from "./routes/orders.js";
@@ -54,6 +55,10 @@ app.route("/", adminProducts);
 // The admin's drop reads: every drop, any status — the product create form reads
 // this to offer a drop to create into. Internal only.
 app.route("/", adminDrops);
+
+// The admin's Settings screen: read and save shop-open, the QR-bill creditor and
+// the notification address. Internal only.
+app.route("/", adminSettings);
 
 serve({ fetch: app.fetch, port: PORT }, ({ port }) => {
   console.log(`api listening on :${port}`);

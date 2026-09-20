@@ -9,6 +9,7 @@ import {
   productCreateInput,
   productInput,
   productSizesInput,
+  settingsInput,
 } from "@attakk/types";
 import { http, HttpResponse } from "msw";
 import {
@@ -22,6 +23,7 @@ import {
   liveDrops,
   orderListRows,
   redlineDrop,
+  settings,
   uploadedImage,
 } from "./fixtures.js";
 
@@ -442,5 +444,22 @@ export const handlers = [
     if (!order)
       return HttpResponse.json({ error: "not_found" }, { status: 404 });
     return HttpResponse.json({ status: "queued" }, { status: 202 });
+  }),
+
+  // The Settings screen: read the whole object, or save it. The PUT validates
+  // with the real settingsInput so a bad IBAN or email is a 400 exactly as the
+  // API rejects it, and echoes the normalised result back like the API's re-read.
+  http.get("*/admin/settings", () => HttpResponse.json(settings)),
+  http.put("*/admin/settings", async ({ request }) => {
+    const parsed = settingsInput.safeParse(
+      await request.json().catch(() => null),
+    );
+    if (!parsed.success) {
+      return HttpResponse.json(
+        { error: "invalid", issues: parsed.error.issues },
+        { status: 400 },
+      );
+    }
+    return HttpResponse.json(parsed.data);
   }),
 ];
