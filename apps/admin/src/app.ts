@@ -422,16 +422,21 @@ function productValues(product: Product): ProductFormValues {
   };
 }
 
-// Zod issues to a per-field message, first message per field wins. Only top-level
-// product fields carry issues here (productInput has no nested shapes), so the
-// path head is always a field name the form can mark.
+// Zod issues to a per-field message, first message per field wins. Only issues on
+// the shared form fields are mapped: the create schema also carries drop_id, whose
+// error the create route surfaces separately (as dropError), so it is skipped here
+// rather than smuggled into a map whose type is these fields alone.
 function fieldErrors(
   issues: readonly { path: PropertyKey[]; message: string }[],
 ): Partial<Record<keyof ProductFormValues, string>> {
   const out: Partial<Record<keyof ProductFormValues, string>> = {};
   for (const issue of issues) {
     const key = issue.path[0];
-    if (typeof key === "string" && !(key in out)) {
+    if (
+      typeof key === "string" &&
+      (PRODUCT_FIELDS as readonly string[]).includes(key) &&
+      !(key in out)
+    ) {
       out[key as keyof ProductFormValues] = issue.message;
     }
   }
@@ -745,11 +750,14 @@ function imageErrorMessage(code: string): string {
 }
 
 // Re-render the edit page with an image error, re-reading the product so its
-// fields, sizes and remaining images are shown intact beside the message.
+// fields, sizes and remaining images are shown intact beside the message. The
+// status mirrors the API's refusal (413 for an oversized upload, 400 otherwise),
+// the way the fields, sizes and delete rejects each carry their API status.
 async function renderImageError(
   c: Context<AdminEnv>,
   id: string,
   message: string,
+  status: 400 | 413,
 ): Promise<Response> {
   const r = await apiRequest(c, productPath(id));
   if ("errorPage" in r) return r.errorPage;
@@ -762,7 +770,7 @@ async function renderImageError(
       sizeState: sizeStateFromProduct(product),
       imageError: message,
     }),
-    400,
+    status,
   );
 }
 
@@ -786,7 +794,8 @@ app.post("/products/:id/images", async (c) => {
   });
   if ("errorPage" in w) return w.errorPage;
   if ("conflict" in w) {
-    return renderImageError(c, id, imageErrorMessage(w.conflict));
+    const status = w.conflict === "too_large" ? 413 : 400;
+    return renderImageError(c, id, imageErrorMessage(w.conflict), status);
   }
   return c.redirect(`/products/${id}?saved=1`);
 });
@@ -801,7 +810,7 @@ app.post("/products/:id/images/:imageId/delete", async (c) => {
   });
   if ("errorPage" in w) return w.errorPage;
   if ("conflict" in w) {
-    return renderImageError(c, id, "That image could not be deleted.");
+    return renderImageError(c, id, "That image could not be deleted.", 400);
   }
   return c.redirect(`/products/${id}?saved=1`);
 });

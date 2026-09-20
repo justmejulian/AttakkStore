@@ -545,6 +545,7 @@ test("an oversized upload re-renders the page with the reason", async () => {
     `/products/${jerseyProduct.id}/images`,
     await authed(),
   );
-  assert.equal(res.status, 400);
+  // The re-rendered page mirrors the API's 413.
+  assert.equal(res.status, 413);
   assert.match(await res.text(), /too large/);
 });
