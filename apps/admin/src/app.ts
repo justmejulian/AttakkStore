@@ -1,4 +1,5 @@
 import {
+  dropStatusInput,
   loginInput,
   MAX_NOTE_LEN,
   ORDER_STATUSES,
@@ -22,6 +23,7 @@ import { type AdminEnv, requireAuth } from "./auth.js";
 import { ordersToCsv } from "./csv.js";
 import { clearSession, getSession, setSession } from "./session.js";
 import {
+  dropsPage,
   homePage,
   loginPage,
   notFoundPage,
@@ -813,4 +815,38 @@ app.post("/products/:id/images/:imageId/delete", async (c) => {
     return renderImageError(c, id, "That image could not be deleted.", 400);
   }
   return c.redirect(`/products/${id}?saved=1`);
+});
+
+// -------------------------------------------------------------- drop screens
+
+// The API path for one drop, with the id encoded before it is spliced in.
+function dropPath(id: string, suffix = ""): string {
+  return `/admin/drops/${encodeURIComponent(id)}${suffix}`;
+}
+
+// The drops list: every drop, any status, with the per-row archive control. Reuses
+// loadDrops, the same read the product create form's drop picker uses.
+app.get("/drops", async (c) => {
+  const d = await loadDrops(c);
+  if ("errorPage" in d) return d.errorPage;
+  const flash = c.req.query("updated") ? "Status updated." : undefined;
+  return c.html(dropsPage({ user: c.get("user"), drops: d.drops, flash }));
+});
+
+// The archive control: flip a drop's status from the list. The dropdown only ever
+// offers the three real statuses, so a body the schema rejects is a tampered form
+// and bounces back to the list rather than erroring. On success, redirect to the
+// list (POST-then-redirect) with a flash.
+app.post("/drops/:id/status", async (c) => {
+  const id = c.req.param("id");
+  const form = await c.req.parseBody();
+  const parsed = dropStatusInput.safeParse({ status: form.status });
+  if (!parsed.success) return c.redirect("/drops");
+  const r = await apiRequest(
+    c,
+    dropPath(id, "/status"),
+    jsonBody("PATCH", parsed.data),
+  );
+  if ("errorPage" in r) return r.errorPage;
+  return c.redirect("/drops?updated=1");
 });

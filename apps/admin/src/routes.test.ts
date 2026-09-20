@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { after, afterEach, before, test } from "node:test";
 import {
   adminCredentials,
+  adminDrops,
   adminProducts,
   jerseyProduct,
   orderListRows,
@@ -548,4 +549,39 @@ test("an oversized upload re-renders the page with the reason", async () => {
   // The re-rendered page mirrors the API's 413.
   assert.equal(res.status, 413);
   assert.match(await res.text(), /too large/);
+});
+
+test("the drops list is behind the auth gate", async () => {
+  const res = await app.request("/drops");
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get("location"), "/login");
+});
+
+test("GET /drops lists every drop with a status control", async () => {
+  const res = await get("/drops", await authed());
+  assert.equal(res.status, 200);
+  const body = await res.text();
+  // Every drop, any status, appears; each carries its own status form.
+  for (const d of adminDrops) assert.match(body, new RegExp(d.name));
+  assert.match(body, /action="\/drops\/1\/status"/);
+  assert.match(body, /<select name="status"/);
+});
+
+test("POST /drops/:id/status updates and redirects with a flash", async () => {
+  const cookie = await authed();
+  const res = await form("/drops/1/status", cookie, { status: "archived" });
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get("location"), "/drops?updated=1");
+
+  const list = await get("/drops?updated=1", cookie);
+  assert.match(await list.text(), /Status updated\./);
+});
+
+test("POST /drops/:id/status with a bad value bounces back without calling the API", async () => {
+  // A tampered status is not sent to the API; the route redirects to the plain
+  // list, not the updated one. If it did call the mock, onUnhandledRequest would
+  // still pass (the handler exists), so the redirect target is what pins it.
+  const res = await form("/drops/1/status", await authed(), { status: "sold" });
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get("location"), "/drops");
 });

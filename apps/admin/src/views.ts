@@ -1,6 +1,7 @@
 import {
   type AdminProductRow,
   type Drop,
+  DROP_STATUSES,
   MAX_ALT_LEN,
   MAX_FIT_LEN,
   MAX_FIT_URL_LEN,
@@ -116,7 +117,8 @@ function shell(title: string, user: Session, body: Html): Html {
     title,
     html`<header>
         <nav>
-          <a href="/orders">Orders</a> · <a href="/products">Products</a>
+          <a href="/orders">Orders</a> · <a href="/products">Products</a> ·
+          <a href="/drops">Drops</a>
         </nav>
         <p>
           Signed in as <strong>${user.username}</strong>.
@@ -343,6 +345,71 @@ function byDrop(
 // The products screen: every product grouped by its drop, each row linking to its
 // edit page and showing status, price, and the ordered-units tally against the
 // pre-order target so it is clear how close a piece is to being made.
+// The per-row archive control: a status dropdown and its own Update button, in a
+// form posting to the drop's status route. Its own form (not the whole table) so
+// updating one drop leaves the others alone; a plain submit rather than an
+// on-change auto-submit, since the admin ships no client JS. Setting a drop to
+// archived hides it from the shop and stops its products being bought, and back to
+// live reverses that — nothing here is destructive, so no confirm.
+function dropStatusControl(drop: Drop): Html {
+  return html`<form method="post" action="/drops/${drop.id}/status">
+    <select name="status" aria-label="Status for ${drop.name}">
+      ${DROP_STATUSES.map(
+        (s) =>
+          html`<option
+            value="${s}"
+            ${drop.status === s ? html`selected` : html``}
+          >
+            ${s}
+          </option>`,
+      )}
+    </select>
+    <button type="submit">Update</button>
+  </form>`;
+}
+
+// The drops list: every drop, any status, in the order the API returns (sort then
+// id). Each row carries the archive control. The name is plain text for now; the
+// create and edit screens (with the theming fields) land next, and turn it into an
+// edit link. `flash` confirms a status change.
+export function dropsPage(opts: {
+  user: Session;
+  drops: Drop[];
+  flash?: string;
+}) {
+  return shell(
+    "Drops",
+    opts.user,
+    html`<h1>Drops</h1>
+      ${opts.flash ? html`<p role="status">${opts.flash}</p>` : ""}
+      ${
+        opts.drops.length === 0
+          ? html`<p>No drops yet.</p>`
+          : html`<table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Year</th>
+                  <th>No</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${opts.drops.map(
+                  (d) =>
+                    html`<tr>
+                      <td>${d.name}</td>
+                      <td>${d.year}</td>
+                      <td>${d.no}</td>
+                      <td>${dropStatusControl(d)}</td>
+                    </tr>`,
+                )}
+              </tbody>
+            </table>`
+      }`,
+  );
+}
+
 export function productsPage(opts: {
   user: Session;
   products: AdminProductRow[];
