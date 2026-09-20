@@ -5,6 +5,7 @@ import {
   orderNoteInput,
   orderStatusInput,
   productInput,
+  productSizesInput,
   type AdminProductRow,
   type AdminUser,
   type OrderListRow,
@@ -28,6 +29,8 @@ import {
   type ProductFormValues,
   productsPage,
   serviceErrorPage,
+  type NewSizeValues,
+  type SizeRowValues,
 } from "./views.js";
 
 // Whether an API response body carries the identity a session needs. Only id and
@@ -414,6 +417,73 @@ app.get("/products", async (c) => {
   return c.html(productsPage({ user: c.get("user"), products }));
 });
 
+// How many blank rows the size editor offers for adding new sizes. A saved size
+// becomes an existing row next load, so a handful is enough without client JS.
+const NEW_SIZE_ROWS = 3;
+
+// The size editor's rows for a stored product: each size as an existing row, plus
+// the blank rows for adding more.
+function sizeStateFromProduct(product: ProductWithSizes): {
+  existing: SizeRowValues[];
+  fresh: NewSizeValues[];
+} {
+  return {
+    existing: product.sizes.map((s) => ({
+      id: String(s.id),
+      label: s.label,
+      sort: String(s.sort),
+      remove: false,
+    })),
+    fresh: Array.from({ length: NEW_SIZE_ROWS }, () => ({
+      label: "",
+      sort: "",
+    })),
+  };
+}
+
+// Read the size editor back: the desired size list for productSizesInput (kept
+// existing rows plus non-blank new rows) and the rows as submitted, so a reject
+// re-renders exactly what was typed. A removed row drops out of the desired list;
+// a blank new row is ignored.
+function sizesFromForm(form: ProductForm): {
+  sizes: unknown;
+  state: { existing: SizeRowValues[]; fresh: NewSizeValues[] };
+} {
+  const existingCount = Number(formStr(form.existing_count)) || 0;
+  const newCount = Number(formStr(form.new_count)) || 0;
+  const existing: SizeRowValues[] = [];
+  const fresh: NewSizeValues[] = [];
+  const sizes: unknown[] = [];
+
+  for (let i = 0; i < existingCount; i++) {
+    const id = formStr(form[`id_${i}`]);
+    const label = formStr(form[`label_${i}`]);
+    const sort = formStr(form[`sort_${i}`]);
+    const remove = formStr(form[`remove_${i}`]) !== "";
+    existing.push({ id, label, sort, remove });
+    if (!remove) sizes.push({ id: Number(id), label, sort: formNum(sort) });
+  }
+  for (let j = 0; j < newCount; j++) {
+    const label = formStr(form[`new_label_${j}`]);
+    const sort = formStr(form[`new_sort_${j}`]);
+    fresh.push({ label, sort });
+    if (label.trim() !== "") sizes.push({ label, sort: formNum(sort) });
+  }
+  return { sizes: { sizes }, state: { existing, fresh } };
+}
+
+// The API's size-reconcile refusals as a message for the editor.
+function sizesConflictMessage(code: string): string {
+  switch (code) {
+    case "size_in_use":
+      return "A size an order references can't be removed — hide the product instead.";
+    case "unknown_size":
+      return "One of those sizes no longer exists. Reload and try again.";
+    default:
+      return `The sizes were refused (${code}).`;
+  }
+}
+
 app.get("/products/:id", async (c) => {
   const r = await apiRequest(c, productPath(c.req.param("id")));
   if ("errorPage" in r) return r.errorPage;
@@ -424,6 +494,7 @@ app.get("/products/:id", async (c) => {
       user: c.get("user"),
       product,
       values: productValues(product),
+      sizeState: sizeStateFromProduct(product),
       flash,
     }),
   );
@@ -454,6 +525,7 @@ app.post("/products/:id", async (c) => {
         product,
         values: formValues(form),
         errors,
+        sizeState: sizeStateFromProduct(product),
       }),
       status,
     );
@@ -467,6 +539,54 @@ app.post("/products/:id", async (c) => {
     return reject(
       conflictErrors(w.conflict),
       w.conflict === "slug_taken" ? 409 : 400,
+    );
+  }
+  return c.redirect(`/products/${id}?saved=1`);
+});
+
+// Save the product's sizes: a full-list reconcile the API applies. Validated with
+// the same productSizesInput zod; on a bad list or a reconcile the API refuses (a
+// duplicate label, a size an order references), the editor comes back with the
+// submitted rows kept and the reason shown. On success, redirect with a flash.
+app.post("/products/:id/sizes", async (c) => {
+  const id = c.req.param("id");
+  const form = await c.req.parseBody();
+  const { sizes, state } = sizesFromForm(form);
+  const parsed = productSizesInput.safeParse(sizes);
+
+  const reject = async (
+    error: string,
+    status: 400 | 409 | 422,
+  ): Promise<Response> => {
+    const r = await apiRequest(c, productPath(id));
+    if ("errorPage" in r) return r.errorPage;
+    const product = (await r.res.json()) as ProductWithSizes;
+    return c.html(
+      productEditPage({
+        user: c.get("user"),
+        product,
+        values: productValues(product),
+        sizeState: state,
+        sizesError: error,
+      }),
+      status,
+    );
+  };
+
+  if (!parsed.success) {
+    return reject(parsed.error.issues[0]?.message ?? "Invalid sizes.", 400);
+  }
+
+  const w = await apiWrite(
+    c,
+    productPath(id, "/sizes"),
+    jsonBody("PUT", parsed.data),
+  );
+  if ("errorPage" in w) return w.errorPage;
+  if ("conflict" in w) {
+    return reject(
+      sizesConflictMessage(w.conflict),
+      w.conflict === "size_in_use" ? 409 : 422,
     );
   }
   return c.redirect(`/products/${id}?saved=1`);

@@ -327,3 +327,70 @@ test("POST /products/:id is a 400 with values kept when the form is invalid", as
   // The edit form is re-rendered (its action present), values preserved.
   assert.match(body, new RegExp(`action="/products/${jerseyProduct.id}"`));
 });
+
+// jerseyProduct's fixture sizes are 100 (S), 101 (M), 102 (L); the orders
+// reference 100 and 101, so only 102 is free to remove.
+const jerseySizeFields = {
+  existing_count: "3",
+  id_0: "100",
+  label_0: "S",
+  sort_0: "0",
+  id_1: "101",
+  label_1: "M",
+  sort_1: "1",
+  id_2: "102",
+  label_2: "L",
+  sort_2: "2",
+};
+
+test("GET /products/:id renders the size editor with the current sizes", async () => {
+  const res = await get(`/products/${jerseyProduct.id}`, await authed());
+  const body = await res.text();
+  assert.match(
+    body,
+    new RegExp(`action="/products/${jerseyProduct.id}/sizes"`),
+  );
+  // An existing row (its id hidden, its label editable) and a blank add row.
+  assert.match(body, /name="id_0" value="100"/);
+  assert.match(body, /name="label_0"/);
+  assert.match(body, /name="new_label_0"/);
+});
+
+test("POST sizes keeping all and adding one redirects with a flash", async () => {
+  const res = await form(
+    `/products/${jerseyProduct.id}/sizes`,
+    await authed(),
+    {
+      ...jerseySizeFields,
+      new_count: "1",
+      new_label_0: "XL",
+      new_sort_0: "3",
+    },
+  );
+  assert.equal(res.status, 302);
+  assert.equal(
+    res.headers.get("location"),
+    `/products/${jerseyProduct.id}?saved=1`,
+  );
+});
+
+test("POST sizes removing an ordered size is a 409 with the reason kept", async () => {
+  const res = await form(
+    `/products/${jerseyProduct.id}/sizes`,
+    await authed(),
+    { ...jerseySizeFields, remove_1: "1", new_count: "0" }, // drop M (id 101, in use)
+  );
+  assert.equal(res.status, 409);
+  const body = await res.text();
+  assert.match(body, /be removed/); // "can't" is HTML-escaped in the rendered page
+});
+
+test("POST sizes with duplicate labels is a 400 before the API is called", async () => {
+  const res = await form(
+    `/products/${jerseyProduct.id}/sizes`,
+    await authed(),
+    { ...jerseySizeFields, label_1: "S", new_count: "0" }, // two S rows
+  );
+  assert.equal(res.status, 400);
+  assert.match(await res.text(), /unique/);
+});

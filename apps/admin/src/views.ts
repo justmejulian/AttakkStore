@@ -4,6 +4,7 @@ import {
   MAX_FIT_URL_LEN,
   MAX_PRODUCT_DESCRIPTION_LEN,
   MAX_PRODUCT_NAME_LEN,
+  MAX_SIZE_LABEL_LEN,
   MAX_SLUG_LEN,
   ORDER_STATUSES,
   type OrderListRow,
@@ -31,6 +32,20 @@ export type ProductFormValues = Record<
   | "sort",
   string
 >;
+
+// A row of the size editor. Existing sizes carry their id (so the reconcile keeps
+// the row an order references) and can be marked for removal; a new size is a
+// blank row with no id. All values are strings — what the form submits and echoes.
+export interface SizeRowValues {
+  id: string;
+  label: string;
+  sort: string;
+  remove: boolean;
+}
+export interface NewSizeValues {
+  label: string;
+  sort: string;
+}
 
 // Server-rendered HTML, plain forms, no client framework and no build step — the
 // admin is presentation over the API. This is a deliberately spare shell; the
@@ -398,15 +413,95 @@ function textField(opts: {
   </p>`;
 }
 
-// The product edit form: the editable fields with the current values, a service-
-// side price hint in francs, and the product's sizes shown read-only for now (the
-// size editor and images land in later steps). `errors` marks a field the API or
-// the form rejected; `flash` confirms a save.
+// The size editor: one row per existing size (its id hidden so the reconcile
+// keeps it, a remove checkbox to drop it) followed by a few blank rows for new
+// sizes. A full-list form posting to its own route, so it and the fields form are
+// independent — rejecting one leaves the other showing stored values. Counts are
+// carried in hidden fields so the POST knows how many rows to read. `sizesError`
+// shows above when the reconcile is refused (a duplicate label, a size in use).
+function sizesForm(opts: {
+  productId: number;
+  existing: SizeRowValues[];
+  fresh: NewSizeValues[];
+  error?: string;
+}): Html {
+  return html`<h2>Sizes</h2>
+    ${opts.error ? html`<p role="alert">${opts.error}</p>` : ""}
+    <form method="post" action="/products/${opts.productId}/sizes">
+      <input
+        type="hidden"
+        name="existing_count"
+        value="${opts.existing.length}"
+      />
+      <input type="hidden" name="new_count" value="${opts.fresh.length}" />
+      ${
+        opts.existing.length === 0
+          ? html`<p>No sizes yet.</p>`
+          : opts.existing.map(
+              (row, i) =>
+                html`<p>
+                  <input type="hidden" name="id_${i}" value="${row.id}" />
+                  <input
+                    name="label_${i}"
+                    value="${row.label}"
+                    maxlength="${MAX_SIZE_LABEL_LEN}"
+                    aria-label="Size label"
+                  />
+                  <input
+                    name="sort_${i}"
+                    type="number"
+                    value="${row.sort}"
+                    min="0"
+                    aria-label="Sort"
+                  />
+                  <label>
+                    <input
+                      type="checkbox"
+                      name="remove_${i}"
+                      value="1"
+                      ${row.remove ? html`checked` : html``}
+                    />
+                    remove
+                  </label>
+                </p>`,
+            )
+      }
+      <p><em>Add sizes</em></p>
+      ${opts.fresh.map(
+        (row, j) =>
+          html`<p>
+            <input
+              name="new_label_${j}"
+              value="${row.label}"
+              maxlength="${MAX_SIZE_LABEL_LEN}"
+              placeholder="new size"
+              aria-label="New size label"
+            />
+            <input
+              name="new_sort_${j}"
+              type="number"
+              value="${row.sort}"
+              min="0"
+              aria-label="New size sort"
+            />
+          </p>`,
+      )}
+      <button type="submit">Save sizes</button>
+    </form>`;
+}
+
+// The product edit page: two independent forms — the fields (with the current
+// values and a franc price hint) and the size editor. `errors` marks a field the
+// fields form rejected; `sizeState` supplies the size rows (submitted values on a
+// size reject, stored otherwise) and `sizesError` its message; `flash` confirms a
+// save. Images land in the next step.
 export function productEditPage(opts: {
   user: Session;
   product: ProductWithSizes;
   values: ProductFormValues;
   errors?: Partial<Record<keyof ProductFormValues, string>>;
+  sizeState: { existing: SizeRowValues[]; fresh: NewSizeValues[] };
+  sizesError?: string;
   flash?: string;
 }) {
   const { product, values, errors } = opts;
@@ -506,11 +601,11 @@ ${values.description}</textarea>
         <button type="submit">Save</button>
       </form>
 
-      <h2>Sizes</h2>
-      ${
-        product.sizes.length === 0
-          ? html`<p>No sizes.</p>`
-          : html`<p>${product.sizes.map((s) => s.label).join(", ")}</p>`
-      }`,
+      ${sizesForm({
+        productId: product.id,
+        existing: opts.sizeState.existing,
+        fresh: opts.sizeState.fresh,
+        error: opts.sizesError,
+      })}`,
   );
 }
