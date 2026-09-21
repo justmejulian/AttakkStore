@@ -1,0 +1,474 @@
+---
+/**
+ * A product's page, /products/[slug] — the gallery, the piece's copy, its size
+ * and fit, and the control that adds it to the cart. The page sits on its drop's
+ * own themed surface, read from the drop the product read carries. A live drop's
+ * piece is purchasable; an archived drop keeps its pieces visible but shows a
+ * closed-ordering notice in place of the buy control, so a link shared while the
+ * drop was live still resolves. A hidden product, a draft-drop product or an
+ * unknown slug is a real 404; an API fault renders the chrome with a brief notice
+ * rather than a 500, the same last-known-good stance the drop and home pages take.
+ */
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Section from "@/components/Wrapper/Section.astro";
+import Paragraph from "@/components/Typography/Paragraph.astro";
+import Heading from "@/components/Typography/Heading.astro";
+import ProductGraphic from "@/components/attakk/ProductGraphic.astro";
+import BuyBox from "@/components/attakk/BuyBox.tsx";
+import { getProduct } from "@/lib/catalog.ts";
+import { dropThemeStyle } from "@/lib/drop-theme.ts";
+import { formatFrancs, imageSrc, imageSrcset } from "@/lib/format.ts";
+import type { ProductWithDrop } from "@attakk/types";
+
+const { slug } = Astro.params;
+
+let product: ProductWithDrop | null = null;
+let unavailable = false;
+try {
+  product = slug ? await getProduct(slug) : null;
+} catch (err) {
+  console.error(`product page: read failed for ${slug}`, err);
+  unavailable = true;
+}
+
+// A product that does not exist — hidden, or in a draft drop — is a genuine
+// not-found. Only reached when the API answered; an API fault falls through to
+// the notice below instead.
+if (!product && !unavailable) {
+  return Astro.rewrite("/404");
+}
+
+const drop = product?.drop ?? null;
+const archived = drop?.status === "archived";
+const style = drop ? dropThemeStyle(drop) : "";
+
+// The lead image leads the gallery; the rest follow as further shots. An empty
+// set is a piece with no photo yet, which falls back to the silhouette.
+const images = product?.images ?? [];
+const [lead, ...rest] = images;
+
+const collection = drop ? `${drop.name.split("\n").join(" ")} ${drop.year}` : "";
+const title = product ? product.name : "Product";
+const description =
+  product?.description || product?.fit || "A piece from attakk.";
+---
+
+<BaseLayout title={title} description={description} theme="light">
+  {
+    unavailable ? (
+      <Section paddingTop="large" paddingBottom="large">
+        <Paragraph variant="large" class="color-faded">
+          The store is briefly unavailable. Please try again in a moment.
+        </Paragraph>
+      </Section>
+    ) : (
+      product &&
+      drop && (
+        <section
+          class:list={["product-page", `theme-${drop.theme_base}`]}
+          style={style}
+          data-product={product.slug}
+        >
+          <div class="container">
+            <a class="product-page_back" href={`/drops/${drop.slug}`}>
+              ← {collection}
+            </a>
+
+            <div class="product-page_body">
+              <div class="product-page_gallery">
+                {lead ? (
+                  <img
+                    class="product-page_photo"
+                    src={imageSrc(lead)}
+                    srcset={imageSrcset(lead)}
+                    sizes="(max-width: 60rem) 100vw, 40rem"
+                    width={lead.width}
+                    height={lead.height}
+                    alt={lead.alt}
+                    decoding="async"
+                    style={`background-image:url(${JSON.stringify(lead.placeholder)})`}
+                  />
+                ) : (
+                  <div class="product-page_figure">
+                    <ProductGraphic class="product-page_silhouette" />
+                  </div>
+                )}
+
+                {rest.length > 0 && (
+                  <div class="product-page_more">
+                    {rest.map((image) => (
+                      <img
+                        class="product-page_photo"
+                        src={imageSrc(image)}
+                        srcset={imageSrcset(image)}
+                        sizes="(max-width: 60rem) 50vw, 20rem"
+                        width={image.width}
+                        height={image.height}
+                        alt={image.alt}
+                        loading="lazy"
+                        decoding="async"
+                        style={`background-image:url(${JSON.stringify(image.placeholder)})`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div class="product-page_info">
+                <a class="product-page_eyebrow" href={`/drops/${drop.slug}`}>
+                  {collection}
+                </a>
+
+                <Heading tag="h1" variant="h2" class="product-page_name margin-top-0">
+                  {product.name}
+                </Heading>
+
+                <p class="product-page_price">
+                  {formatFrancs(product.price_rappen)}
+                  <span class="product-page_currency">CHF</span>
+                </p>
+
+                {product.description && (
+                  <p class="product-page_description">{product.description}</p>
+                )}
+
+                {product.fit && (
+                  <p class="product-page_fit">
+                    <span class="product-page_fit-label">Fit</span>
+                    {product.fit}
+                    {product.fit_url && (
+                      <a
+                        class="product-page_fit-link"
+                        href={product.fit_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Size &amp; fit guide ↗
+                      </a>
+                    )}
+                  </p>
+                )}
+
+                {archived ? (
+                  <p class="product-page_notice">
+                    This piece is from an archived collection — ordering has
+                    closed. It stays here as a record of the drop.
+                  </p>
+                ) : (
+                  <BuyBox
+                    client:visible
+                    productId={product.id}
+                    slug={product.slug}
+                    title={product.name}
+                    unitPriceRappen={product.price_rappen}
+                    sizes={product.sizes.map((s) => ({
+                      id: s.id,
+                      label: s.label,
+                    }))}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+      )
+    )
+  }
+</BaseLayout>
+
+<style is:global>
+  @layer components {
+    /* The page sits on the drop's own light/dark surface, the collection's
+       colours riding in as the inline custom properties dropThemeStyle set. */
+    .product-page {
+      padding-block: var(--section-space-medium);
+      background-color: var(--background);
+      color: var(--text);
+    }
+
+    .product-page_back {
+      display: inline-block;
+      margin-bottom: var(--space-6);
+      font-family: var(--label-family);
+      font-size: var(--label);
+      letter-spacing: var(--label-letter-spacing);
+      text-transform: uppercase;
+      color: var(--text-2);
+      text-decoration: none;
+    }
+
+    .product-page_back:hover {
+      color: var(--text);
+    }
+
+    /* Gallery beside the buy column on a wide page; stacked on a narrow one. The
+       gallery takes the larger share where there is room. */
+    .product-page_body {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: var(--space-6);
+    }
+
+    @media (width >= 64rem) {
+      .product-page_body {
+        grid-template-columns: 1.2fr 1fr;
+        gap: var(--space-8);
+        align-items: start;
+      }
+    }
+
+    .product-page_gallery {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+
+    /* Each shot holds its frame on a faint tint of the ink; the blurred
+       placeholder paints underneath while the file loads. */
+    .product-page_photo {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 1 / 1.15;
+      object-fit: cover;
+      background-color: color-mix(in srgb, var(--text) 5%, transparent);
+      background-size: cover;
+      background-position: center;
+    }
+
+    /* Further shots sit in an autofit row beneath the lead. */
+    .product-page_more {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(10rem, 100%), 1fr));
+      gap: var(--space-3);
+    }
+
+    /* The silhouette fallback, centred on the same tinted frame as a photo. */
+    .product-page_figure {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      aspect-ratio: 1 / 1.15;
+      padding: var(--space-6);
+      background-color: color-mix(in srgb, var(--text) 5%, transparent);
+    }
+
+    .product-page_silhouette {
+      width: 60%;
+      height: 60%;
+      fill: color-mix(in srgb, var(--brand-500) 70%, var(--text));
+      stroke: var(--background);
+      stroke-width: 3;
+    }
+
+    .product-page_info {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+      max-inline-size: 32rem;
+    }
+
+    .product-page_eyebrow {
+      font-family: var(--label-family);
+      font-size: var(--label);
+      letter-spacing: var(--label-letter-spacing);
+      text-transform: uppercase;
+      color: var(--heading-accent);
+      text-decoration: none;
+    }
+
+    .product-page_eyebrow:hover {
+      text-decoration: underline;
+    }
+
+    .product-page_price {
+      margin: 0;
+      font-family: var(--mono-family);
+      font-weight: var(--primary-medium);
+      font-size: var(--h4);
+    }
+
+    .product-page_currency {
+      font-size: 0.5em;
+      color: var(--text-2);
+      margin-left: 0.3em;
+    }
+
+    .product-page_description {
+      margin: 0;
+      color: var(--text-2);
+    }
+
+    .product-page_fit {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: var(--space-2);
+      margin: 0;
+      font-size: var(--text-small);
+      color: var(--text-2);
+    }
+
+    .product-page_fit-label {
+      font-family: var(--label-family);
+      font-size: 0.625rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-2);
+    }
+
+    .product-page_fit-link {
+      color: var(--heading-accent);
+      text-decoration: none;
+    }
+
+    .product-page_fit-link:hover {
+      text-decoration: underline;
+    }
+
+    /* The closed-ordering note on an archived piece, in place of the buy box. */
+    .product-page_notice {
+      margin: 0;
+      padding: var(--space-3) var(--space-4);
+      border: var(--border-width) solid
+        color-mix(in srgb, var(--text) 30%, transparent);
+      border-radius: var(--radius-main);
+      font-family: var(--label-family);
+      font-size: var(--label);
+      letter-spacing: var(--label-letter-spacing);
+      color: var(--text-2);
+    }
+
+    /* ---- the buy box (rendered by BuyBox.tsx, styled here so the island stays
+       pure markup) ---- */
+    .buybox {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+      margin-top: var(--space-2);
+    }
+
+    .buybox_field {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    .buybox_label {
+      font-family: var(--label-family);
+      font-size: 0.625rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-2);
+    }
+
+    .buybox_sizes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+
+    /* Interactive size pills — a 44px minimum tap target, the easiest control to
+       get wrong on a phone. The selected one fills with the collection's accent. */
+    .buybox_size {
+      min-width: 2.75rem;
+      min-height: 2.75rem;
+      padding: 0 var(--space-3);
+      background: transparent;
+      border: var(--border-width) solid var(--border);
+      border-radius: var(--radius-small);
+      font-family: var(--label-family);
+      font-size: var(--label);
+      letter-spacing: var(--label-letter-spacing);
+      color: var(--text);
+      cursor: pointer;
+      transition:
+        border-color var(--hover-duration) var(--hover-ease),
+        background-color var(--hover-duration) var(--hover-ease);
+    }
+
+    @media (hover: hover) {
+      .buybox_size:hover {
+        border-color: var(--heading-accent);
+      }
+    }
+
+    .buybox_size.is-selected {
+      background-color: var(--heading-accent);
+      border-color: var(--heading-accent);
+      color: var(--background);
+    }
+
+    .buybox_qty {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+      align-self: start;
+      border: var(--border-width) solid var(--border);
+      border-radius: var(--radius-small);
+    }
+
+    .buybox_step {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 2.75rem;
+      height: 2.75rem;
+      background: transparent;
+      border: none;
+      font-size: 1.25rem;
+      line-height: 1;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .buybox_step:disabled {
+      color: var(--text-2);
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    .buybox_qty-value {
+      min-width: 2rem;
+      text-align: center;
+      font-family: var(--mono-family);
+      font-size: var(--text-small);
+    }
+
+    /* The primary call to action — the collection's signature colour, hard
+       corners, a full-width block on a phone. */
+    .buybox_add {
+      min-height: 2.75rem;
+      padding: var(--space-3) var(--space-5);
+      background-color: var(--brand-500);
+      color: var(--background);
+      border: var(--border-width) solid var(--brand-500);
+      border-radius: var(--radius-main);
+      font-family: var(--label-family);
+      font-size: var(--label);
+      letter-spacing: var(--label-letter-spacing);
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: opacity var(--hover-duration) var(--hover-ease);
+    }
+
+    @media (hover: hover) {
+      .buybox_add:hover:not(:disabled) {
+        opacity: 0.9;
+      }
+    }
+
+    .buybox_add:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+
+    .buybox_hint {
+      margin: 0;
+      font-family: var(--label-family);
+      font-size: 0.625rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-2);
+    }
+  }
+</style>

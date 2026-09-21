@@ -1,4 +1,4 @@
-import type { DropWithProducts } from "@attakk/types";
+import type { DropWithProducts, ProductWithDrop } from "@attakk/types";
 import { apiFetch } from "./api.js";
 
 // The catalogue reads the storefront makes. Each returns the typed shape the
@@ -46,4 +46,22 @@ export async function getDrop(slug: string): Promise<DropWithProducts | null> {
     throw new Error(`GET /drops/${slug} failed: ${res.status}`);
   }
   return (await res.json()) as DropWithProducts;
+}
+
+// One product by slug, for its page, carrying the drop it belongs to (theme,
+// status, a link back). The mirror of getDrop: a 404 is a real answer — the
+// product does not exist, is hidden, or sits in a draft drop — so it returns
+// null and the page routes to its not-found view; any other non-ok status is an
+// API fault and throws, so a hiccup never reads as a missing product. A product
+// in an archived drop resolves here too (the drop keeps its pieces visible); the
+// page reads drop.status to decide the piece can be shown but not bought.
+export async function getProduct(slug: string): Promise<ProductWithDrop | null> {
+  const res = await apiFetch(`/products/${encodeURIComponent(slug)}`);
+  if (res.status === 404) {
+    return null;
+  }
+  if (!res.ok) {
+    throw new Error(`GET /products/${slug} failed: ${res.status}`);
+  }
+  return (await res.json()) as ProductWithDrop;
 }
