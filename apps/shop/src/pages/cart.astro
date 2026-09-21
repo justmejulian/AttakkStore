@@ -1,0 +1,19 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Section from "@/components/Wrapper/Section.astro";
+import Heading from "@/components/Typography/Heading.astro";
+import ContentCart from "@/components/attakk/ContentCart.astro";
+
+Astro.response.headers.set("Cache-Control", "no-store");
+---
+
+<BaseLayout
+  title="Your cart"
+  description="Your attakk pieces, ready to make yours."
+  noindex
+>
+  <Section paddingTop="large" paddingBottom="large">
+    <Heading tag="h1" variant="h2">Your cart</Heading>
+    <ContentCart />
+  </Section>
+</BaseLayout>

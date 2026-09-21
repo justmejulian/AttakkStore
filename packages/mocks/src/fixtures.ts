@@ -1,4 +1,5 @@
 import type {
+  CartQuote,
   AdminProductRow,
   AdminUser,
   Drop,
@@ -191,6 +192,20 @@ export const jerseyProduct = redlineDrop.products[0];
 export const orderRequest: OrderInput = {
   email: "buyer@example.com",
   items: [{ product_id: 10, size_id: 101, qty: 2 }],
+};
+
+export const cartQuote: CartQuote = {
+  items: [
+    {
+      product_id: 10,
+      size_id: 101,
+      qty: 2,
+      unit_price_rappen: 9500,
+      title: "Redline Jersey",
+      line_total_rappen: 19000,
+    },
+  ],
+  total_rappen: 19000,
 };
 
 // The order the API returns on a clean checkout: the first order on a fresh

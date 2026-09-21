@@ -76,7 +76,6 @@ const count = drop.products.length;
        overrides ride on top. Not the .section class, so its full-bleed
        background rule does not catch the spine. */
     .drop {
-      padding-block: var(--section-space-small);
       background-color: var(--background);
       color: var(--text);
     }
@@ -85,7 +84,7 @@ const count = drop.products.length;
        the site width the container uses. */
     .drop_spine {
       padding-block: var(--space-3);
-      margin-bottom: var(--space-7);
+      margin-bottom: var(--space-4);
       background-color: color-mix(in srgb, var(--text) 5%, transparent);
       border-bottom: var(--border-width) solid
         color-mix(in srgb, var(--text) 22%, transparent);
@@ -111,6 +110,7 @@ const count = drop.products.length;
       display: grid;
       grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.6fr);
       gap: var(--space-8);
+      padding-bottom: var(--space-4);
     }
 
     @media (width < 64rem) {

@@ -350,8 +350,7 @@ function variantKey(line: OrderLineInput): string {
 
 // The whole order the checkout posts. No phone (everything is pickup-only) and
 // no note (that is the admin's field, not the customer's).
-export const orderInput = z.object({
-  email: z.string().trim().toLowerCase().pipe(z.email().max(254)),
+export const cartInput = z.object({
   items: z
     .array(orderLineInput)
     .min(1)
@@ -360,7 +359,16 @@ export const orderInput = z.object({
       error: "each product and size may appear at most once",
     }),
 });
+export type CartInput = z.infer<typeof cartInput>;
+export const orderInput = cartInput.extend({
+  email: z.string().trim().toLowerCase().pipe(z.email().max(254)),
+});
 export type OrderInput = z.infer<typeof orderInput>;
+
+export interface CartQuote {
+  items: (Omit<OrderItem, "id"> & { line_total_rappen: number })[];
+  total_rappen: number;
+}
 
 // Price and title are copied onto the line at order time, not looked up later,
 // so repricing or renaming a product never rewrites an existing order.

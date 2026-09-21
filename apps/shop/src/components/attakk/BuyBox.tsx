@@ -119,12 +119,7 @@ export default function BuyBox({
         </div>
       </div>
 
-      <button
-        type="button"
-        class="buybox_add"
-        disabled={!canAdd}
-        onClick={add}
-      >
+      <button type="button" class="buybox_add" disabled={!canAdd} onClick={add}>
         {added ? "Added to cart ✓" : "Add to cart"}
       </button>
 

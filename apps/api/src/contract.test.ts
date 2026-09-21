@@ -9,6 +9,7 @@ import {
   allDrops,
   archivedDrops,
   createdOrder,
+  cartQuote,
   duplicateVariantRejection,
   jerseyProduct,
   jerseyProductDetail,
@@ -44,6 +45,16 @@ const { adminSettings } = await import("./routes/admin-settings.js");
 const { adminUsers: adminUsersRoute } = await import("./routes/admin-users.js");
 
 after(() => cleanup());
+
+test("POST /cart/quote matches the mock quote", async () => {
+  const response = await orders.request("/cart/quote", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ items: orderRequest.items }),
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), cartQuote);
+});
 
 // Insert the fixture drops, products, sizes and images with their fixed ids, so
 // the SELECTs behind the routes return the same objects the handlers do.

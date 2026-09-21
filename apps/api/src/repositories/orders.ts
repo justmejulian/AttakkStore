@@ -1,5 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type {
+  CartInput,
+  CartQuote,
   Order,
   OrderInput,
   OrderItem,
@@ -108,6 +110,17 @@ function priceLine(line: OrderLineInput): PricedLine {
   };
 }
 
+export const quoteCart = db.transaction((input: CartInput): CartQuote => {
+  const items = input.items.map(priceLine).map((line) => ({
+    ...line,
+    line_total_rappen: line.unit_price_rappen * line.qty,
+  }));
+  return {
+    items,
+    total_rappen: items.reduce((sum, line) => sum + line.line_total_rappen, 0),
+  };
+});
+
 // A 32-hex-char token guarding the receipt URL against a guessed neighbour.
 function newToken(): string {
   return randomBytes(16).toString("hex");
@@ -119,11 +132,7 @@ function newToken(): string {
 export const createOrder = db.transaction(
   (input: OrderInput): OrderWithItems => {
     // Price and validate every line first.
-    const priced = input.items.map(priceLine);
-    const total = priced.reduce(
-      (sum, line) => sum + line.unit_price_rappen * line.qty,
-      0,
-    );
+    const { items: priced, total_rappen: total } = quoteCart(input);
     const token = newToken();
 
     // The RF reference is derived from the order id, which only exists after

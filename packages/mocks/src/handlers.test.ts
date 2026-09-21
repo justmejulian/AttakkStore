@@ -9,6 +9,8 @@ import {
   adminUsers,
   archivedDrops,
   createdOrder,
+  cartQuote,
+  orderRequest,
   jerseyProduct,
   jerseyProductDetail,
   liveDrops,
@@ -41,6 +43,28 @@ function post(path: string, body: unknown): Promise<Response> {
     body: JSON.stringify(body),
   });
 }
+
+test("POST /cart/quote matches the API and prices the submitted quantity", async () => {
+  const response = await post("/cart/quote", { items: orderRequest.items });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), cartQuote);
+  const changed = await post("/cart/quote", {
+    items: [{ ...orderRequest.items[0], qty: 3 }],
+  });
+  assert.equal(
+    ((await changed.json()) as { total_rappen: number }).total_rappen,
+    28500,
+  );
+  assert.equal((await post("/cart/quote", { items: [] })).status, 400);
+  assert.equal(
+    (
+      await post("/cart/quote", {
+        items: [{ product_id: 12, size_id: null, qty: 1 }],
+      })
+    ).status,
+    422,
+  );
+});
 
 function patch(path: string, body: unknown): Promise<Response> {
   return fetch(`${base}${path}`, {

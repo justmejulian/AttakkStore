@@ -1,0 +1,141 @@
+---
+import Cart from "./Cart.tsx";
+
+interface Props {
+  /** Set to `false` to skip rendering this component and its children. */
+  render?: boolean;
+}
+const { render = true } = Astro.props;
+---
+
+{
+  render && (
+    <div class="cart_wrap">
+      <Cart client:only="preact">
+        <p slot="fallback">Loading your cart…</p>
+      </Cart>
+      <noscript>
+        Enable JavaScript to view and edit the cart saved in this browser.
+      </noscript>
+    </div>
+  )
+}
+
+<style is:global>
+  @layer components {
+    .cart_wrap {
+      container-type: inline-size;
+      width: 100%;
+      margin-top: var(--space-7);
+    }
+    .cart_layout {
+      display: grid;
+      align-items: start;
+      gap: var(--space-7);
+      @container (min-width: 64rem) {
+        grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+      }
+    }
+    .cart_list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .cart_item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: var(--space-4);
+      padding-block: var(--space-5);
+      border-top: 0.0625rem solid currentColor;
+    }
+    .cart_details {
+      min-width: 0;
+      display: grid;
+      gap: var(--space-2);
+    }
+    .cart_title {
+      overflow-wrap: anywhere;
+      text-decoration: none;
+    }
+    .cart_label {
+      font-family: var(--label-family);
+      font-size: 0.75rem;
+    }
+    .cart_controls {
+      display: grid;
+      align-content: start;
+      gap: var(--space-2);
+    }
+    .cart_controls label {
+      display: grid;
+      gap: var(--space-2);
+    }
+    .cart_controls select {
+      min-height: 2.75rem;
+      min-width: 4rem;
+      border: 0.0625rem solid currentColor;
+      border-radius: 0;
+      color: inherit;
+      background: var(--background);
+      padding-inline: var(--space-2);
+      font: inherit;
+    }
+    .cart_remove,
+    .cart_retry,
+    .cart_continue {
+      display: inline-flex;
+      align-items: center;
+      min-height: 2.75rem;
+      text-decoration: underline;
+      text-underline-offset: 0.2em;
+      cursor: pointer;
+    }
+    .cart_price {
+      grid-column: 1 / -1;
+      font-family: var(--mono-family);
+    }
+    .cart_summary {
+      display: grid;
+      gap: var(--space-5);
+      padding: var(--space-5);
+      background: var(--background-2);
+      border: 0.125rem solid currentColor;
+      min-width: 0;
+    }
+    .cart_total {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: var(--space-3);
+      font-family: var(--mono-family);
+    }
+    .cart_status {
+      font-size: 0.875rem;
+    }
+    .cart_action {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-4);
+      min-height: 3rem;
+      padding: var(--space-3) var(--space-4);
+      font-family: var(--label-family);
+      text-transform: uppercase;
+      text-decoration: none;
+      background: var(--ink);
+      color: var(--paper);
+      border: 0.125rem solid var(--ink);
+      cursor: pointer;
+    }
+    .cart_action:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .cart_empty {
+      display: grid;
+      justify-items: start;
+      gap: var(--space-5);
+      padding-block: var(--space-6);
+    }
+  }
+</style>

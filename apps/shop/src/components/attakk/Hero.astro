@@ -7,7 +7,6 @@
  */
 import Section from "@/components/Wrapper/Section.astro";
 import Heading from "@/components/Typography/Heading.astro";
-import Paragraph from "@/components/Typography/Paragraph.astro";
 import Button from "@/components/Button.astro";
 import ButtonWrapper from "@/components/Wrapper/ButtonWrapper.astro";
 
@@ -21,7 +20,7 @@ interface Props {
 const { liveLabel, ctaHref = "#drops" } = Astro.props;
 ---
 
-<Section class="hero_wrap" paddingTop="large" gap="6">
+<Section class="hero_wrap" gap="6">
   <p class="hero_meta label color-faded">
     <span>Zürich, CH · 47.3769°N 8.5417°E</span>
     <span>Friends + family only</span>
@@ -33,10 +32,6 @@ const { liveLabel, ctaHref = "#drops" } = Astro.props;
   </Heading>
 
   <div class="hero_lede">
-    <Paragraph variant="large" class="margin-top-0" maxWidth={48}>
-      attakk is a gym in Zürich and a small uniform brand for the people who
-      train there. Every drop is a uniform for a season we've actually lived.
-    </Paragraph>
     <ButtonWrapper class="hero_actions">
       <Button element="link" href={ctaHref}>Shop the current drop</Button>
       <span class="label color-faded">No restocks · sizes go fast</span>
@@ -72,10 +67,9 @@ const { liveLabel, ctaHref = "#drops" } = Astro.props;
     /* The lede and its call to action, side by side on a wide page and stacked
        when the room runs out. */
     .hero_lede {
-      display: grid;
-      grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-      gap: var(--space-6);
-      align-items: end;
+      width: 100%;
+      display: flex;
+      justify-content: center;
     }
 
     @media (width < 48rem) {
@@ -88,7 +82,7 @@ const { liveLabel, ctaHref = "#drops" } = Astro.props;
     .hero_actions {
       display: flex;
       flex-direction: column;
-      align-items: start;
+      align-items: center;
       gap: var(--space-3);
     }
   }

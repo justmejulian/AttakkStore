@@ -47,7 +47,9 @@ const style = drop ? dropThemeStyle(drop) : "";
 const images = product?.images ?? [];
 const [lead, ...rest] = images;
 
-const collection = drop ? `${drop.name.split("\n").join(" ")} ${drop.year}` : "";
+const collection = drop
+  ? `${drop.name.split("\n").join(" ")} ${drop.year}`
+  : "";
 const title = product ? product.name : "Product";
 const description =
   product?.description || product?.fit || "A piece from attakk.";
@@ -119,7 +121,11 @@ const description =
                   {collection}
                 </a>
 
-                <Heading tag="h1" variant="h2" class="product-page_name margin-top-0">
+                <Heading
+                  tag="h1"
+                  variant="h2"
+                  class="product-page_name margin-top-0"
+                >
                   {product.name}
                 </Heading>
 

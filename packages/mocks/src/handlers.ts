@@ -1,4 +1,6 @@
 import {
+  cartInput,
+  type CartQuote,
   adminActiveInput,
   adminUserCreateInput,
   dropInput,
@@ -164,6 +166,32 @@ const activeAdminCount = adminUsers.filter((u) => u.active === 1).length;
 const MOCK_NEW_ADMIN_USER_ID = 700;
 
 export const handlers = [
+  http.post("*/cart/quote", async ({ request }) => {
+    const parsed = cartInput.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) {
+      return HttpResponse.json({ error: "invalid" }, { status: 400 });
+    }
+    for (const line of parsed.data.items) {
+      const error = lineRejection(line);
+      if (error) return HttpResponse.json({ error }, { status: 422 });
+    }
+    const items = parsed.data.items.map((line) => {
+      const product = productsById.get(line.product_id)!;
+      return {
+        ...line,
+        title: product.name,
+        unit_price_rappen: product.price_rappen,
+        line_total_rappen: product.price_rappen * line.qty,
+      };
+    });
+    return HttpResponse.json({
+      items,
+      total_rappen: items.reduce(
+        (sum, line) => sum + line.line_total_rappen,
+        0,
+      ),
+    } satisfies CartQuote);
+  }),
   // Registered before */drops for the same MSW *-wildcard reason as admin
   // products: without it, /admin/drops would match */drops and return the live
   // collections. The real API distinguishes the literal prefixes.

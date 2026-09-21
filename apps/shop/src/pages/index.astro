@@ -14,7 +14,6 @@ import BaseLayout from "@/layouts/BaseLayout.astro";
 import Section from "@/components/Wrapper/Section.astro";
 import Paragraph from "@/components/Typography/Paragraph.astro";
 import Hero from "@/components/attakk/Hero.astro";
-import MarqueeStrip from "@/components/attakk/MarqueeStrip.astro";
 import DropSection from "@/components/attakk/DropSection.astro";
 import Interstitial from "@/components/attakk/Interstitial.astro";
 import { getLiveDrops } from "@/lib/catalog.ts";
@@ -43,34 +42,14 @@ const notice = unavailable
     ? "No drops are live right now — the next one is on its way."
     : null;
 
-// Chrome, not content — evergreen claims that don't go stale between drops,
-// mirroring the Ticker's items rather than travelling as data.
-const credentials = [
-  "Est. 2023",
-  "No restocks",
-  "Built by members",
-  "Ships worldwide",
-];
-
 // The next collection's name for an interstitial, with the stored newlines in a
 // drop name flattened to spaces so the rule reads on one line.
 const nextName = (drop: DropWithProducts) =>
   `${drop.name.split("\n").join(" ")} ${drop.year}`;
 ---
 
-<BaseLayout
-  title="ATTAKK Studios — Store"
-  description="attakk is a private gym in Zürich and a small uniform brand for the people who train there."
-  theme="light"
->
+<BaseLayout title="ATTAKK Studios — Store" theme="light">
   <Hero liveLabel={liveLabel} />
-
-  <MarqueeStrip
-    items={credentials}
-    label="Credentials"
-    speed="30s"
-    border="block"
-  />
 
   <div id="drops">
     {

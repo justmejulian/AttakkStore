@@ -55,7 +55,9 @@ export async function getDrop(slug: string): Promise<DropWithProducts | null> {
 // API fault and throws, so a hiccup never reads as a missing product. A product
 // in an archived drop resolves here too (the drop keeps its pieces visible); the
 // page reads drop.status to decide the piece can be shown but not bought.
-export async function getProduct(slug: string): Promise<ProductWithDrop | null> {
+export async function getProduct(
+  slug: string,
+): Promise<ProductWithDrop | null> {
   const res = await apiFetch(`/products/${encodeURIComponent(slug)}`);
   if (res.status === 404) {
     return null;
