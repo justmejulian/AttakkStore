@@ -1,0 +1,155 @@
+---
+/**
+ * A collection's own page, /drops/[slug] — the full drop, every piece. One
+ * canonical URL across a drop's life: a live drop shows its pieces to buy, an
+ * archived one keeps the same URL and returns 200 with a note that ordering has
+ * closed, so a link shared while a drop was live never dies. A draft or unknown
+ * slug is a real 404; an API fault renders the chrome with a brief notice rather
+ * than a 500, the same last-known-good stance the home page takes.
+ */
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Section from "@/components/Wrapper/Section.astro";
+import Paragraph from "@/components/Typography/Paragraph.astro";
+import DropHeader from "@/components/attakk/DropHeader.astro";
+import ProductCard from "@/components/attakk/ProductCard.astro";
+import { getDrop } from "@/lib/catalog.ts";
+import { dropSwatch, dropThemeStyle } from "@/lib/drop-theme.ts";
+import type { DropWithProducts } from "@attakk/types";
+
+const { slug } = Astro.params;
+
+let drop: DropWithProducts | null = null;
+let unavailable = false;
+try {
+  drop = slug ? await getDrop(slug) : null;
+} catch (err) {
+  console.error(`drop page: read failed for ${slug}`, err);
+  unavailable = true;
+}
+
+// A drop that does not exist — or is still a draft — is a genuine not-found, so
+// route to the styled 404 with a 404 status. Only reached when the API answered;
+// an API fault falls through to the notice below instead.
+if (!drop && !unavailable) {
+  return Astro.rewrite("/404");
+}
+
+const archived = drop?.status === "archived";
+const style = drop ? dropThemeStyle(drop) : "";
+const swatch = drop ? dropSwatch(drop) : "var(--text)";
+const count = drop?.products.length ?? 0;
+
+const title = drop ? `${drop.name.split("\n").join(" ")} ${drop.year}` : "Drop";
+const description = drop?.tagline || drop?.body || "A collection from attakk.";
+---
+
+<BaseLayout title={title} description={description} theme="light">
+  {
+    unavailable ? (
+      <Section paddingTop="large" paddingBottom="large">
+        <Paragraph variant="large" class="color-faded">
+          The store is briefly unavailable. Please try again in a moment.
+        </Paragraph>
+      </Section>
+    ) : (
+      drop && (
+        <section
+          class:list={["drop-page", `theme-${drop.theme_base}`]}
+          style={style}
+          data-drop={drop.slug}
+        >
+          <div class="container">
+            <a class="drop-page_back" href="/drops">
+              ← All drops
+            </a>
+
+            <div class="drop-page_header">
+              <DropHeader drop={drop} />
+            </div>
+
+            {archived && (
+              <p class="drop-page_notice">
+                This collection is archived — ordering has closed. It stays here
+                as a record of the drop.
+              </p>
+            )}
+
+            {count > 0 ? (
+              <div class="drop-page_grid">
+                {drop.products.map((product, i) => (
+                  <ProductCard
+                    product={product}
+                    index={i + 1}
+                    count={count}
+                    swatch={swatch}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p class="drop-page_empty">No pieces in this collection yet.</p>
+            )}
+          </div>
+        </section>
+      )
+    )
+  }
+</BaseLayout>
+
+<style>
+  @layer components {
+    /* The page sits on the drop's own light/dark surface, the collection's
+       colours riding in as the inline custom properties dropThemeStyle set. */
+    .drop-page {
+      padding-block: var(--section-space-medium);
+      background-color: var(--background);
+      color: var(--text);
+    }
+
+    .drop-page_back {
+      display: inline-block;
+      margin-bottom: var(--space-6);
+      font-family: var(--label-family);
+      font-size: var(--label);
+      letter-spacing: var(--label-letter-spacing);
+      text-transform: uppercase;
+      color: var(--text-2);
+      text-decoration: none;
+    }
+
+    .drop-page_back:hover {
+      color: var(--text);
+    }
+
+    .drop-page_header {
+      margin-bottom: var(--space-7);
+    }
+
+    /* A standing note on an archived collection: the pieces are shown, but the
+       drop no longer takes orders. */
+    .drop-page_notice {
+      margin-block: 0 var(--space-6);
+      padding: var(--space-3) var(--space-4);
+      border: var(--border-width) solid
+        color-mix(in srgb, var(--text) 30%, transparent);
+      border-radius: var(--radius-main);
+      font-family: var(--label-family);
+      font-size: var(--label);
+      letter-spacing: var(--label-letter-spacing);
+      color: var(--text-2);
+    }
+
+    /* Autofit so one piece and a dozen take the same markup; a card holds its
+       column rather than stretching across the row when the drop is small. */
+    .drop-page_grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(14rem, 100%), 1fr));
+      gap: var(--space-3);
+      align-items: stretch;
+    }
+
+    .drop-page_empty {
+      margin: 0;
+      color: var(--text-2);
+    }
+  }
+</style>

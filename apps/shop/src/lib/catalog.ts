@@ -19,3 +19,31 @@ export async function getLiveDrops(): Promise<DropWithProducts[]> {
   }
   return (await res.json()) as DropWithProducts[];
 }
+
+// The archived collections, in the API's sort order, for the archive grid. The
+// mirror of getLiveDrops — a drop that has ended keeps its pieces here. Throws
+// on an unreachable or erroring API, so the archive page decides its fallback
+// the same way the home page does for the live collections.
+export async function getArchivedDrops(): Promise<DropWithProducts[]> {
+  const res = await apiFetch("/archive");
+  if (!res.ok) {
+    throw new Error(`GET /archive failed: ${res.status}`);
+  }
+  return (await res.json()) as DropWithProducts[];
+}
+
+// One collection by slug, live or archived, for its page. A 404 is a real
+// answer — the drop does not exist, or is still a draft — so it returns null
+// and the page routes to its not-found view; any other non-ok status is an API
+// fault and throws, so a hiccup never reads as a missing drop. Both a live and
+// an archived drop resolve here: a drop keeps one canonical URL across its life.
+export async function getDrop(slug: string): Promise<DropWithProducts | null> {
+  const res = await apiFetch(`/drops/${encodeURIComponent(slug)}`);
+  if (res.status === 404) {
+    return null;
+  }
+  if (!res.ok) {
+    throw new Error(`GET /drops/${slug} failed: ${res.status}`);
+  }
+  return (await res.json()) as DropWithProducts;
+}

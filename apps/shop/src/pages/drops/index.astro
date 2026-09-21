@@ -1,0 +1,56 @@
+---
+/**
+ * /drops — every live collection, one themed DropSection each. The home leads
+ * with a manifesto and shows the same collections; this is the plain browse
+ * index the nav points at. When the API can't be reached the page still renders
+ * its chrome and shows a brief notice, never a 500.
+ */
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Section from "@/components/Wrapper/Section.astro";
+import Heading from "@/components/Typography/Heading.astro";
+import Paragraph from "@/components/Typography/Paragraph.astro";
+import DropSection from "@/components/attakk/DropSection.astro";
+import { getLiveDrops } from "@/lib/catalog.ts";
+import type { DropWithProducts } from "@attakk/types";
+
+let drops: DropWithProducts[] = [];
+let unavailable = false;
+try {
+  drops = await getLiveDrops();
+} catch (err) {
+  console.error("drops index: catalogue read failed", err);
+  unavailable = true;
+}
+
+const notice = unavailable
+  ? "The store is briefly unavailable. Please try again in a moment."
+  : drops.length === 0
+    ? "No drops are live right now — the next one is on its way."
+    : null;
+---
+
+<BaseLayout
+  title="Drops"
+  description="Every live collection from attakk — cut in small runs, no restocks."
+  theme="light"
+>
+  <Section paddingTop="large" paddingBottom={notice ? "large" : "none"}>
+    <Heading variant="h2" tag="h1">Drops</Heading>
+    <Paragraph variant="large" class="color-faded" maxWidth={36}>
+      Live collections, cut in small runs. No restocks — when a drop closes it
+      moves to the archive.
+    </Paragraph>
+  </Section>
+
+  {
+    notice && (
+      <Section paddingTop="none" paddingBottom="large">
+        <Paragraph variant="large" class="color-faded">
+          {notice}
+        </Paragraph>
+      </Section>
+    )
+  }
+
+  {drops.map((drop) => <DropSection drop={drop} />)}
+</BaseLayout>

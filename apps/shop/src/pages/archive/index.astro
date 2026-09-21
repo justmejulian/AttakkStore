@@ -1,0 +1,71 @@
+---
+/**
+ * /archive — the past drops grid. Every archived collection as a tile linking to
+ * its own page, which keeps its live URL and returns 200. Sold out is not gone:
+ * these links live in DMs and stories for years, so the archive is a real,
+ * browsable shelf rather than a dead end. Reads the archived collections at
+ * request time; an API fault renders the chrome with a brief notice, not a 500.
+ */
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Section from "@/components/Wrapper/Section.astro";
+import Heading from "@/components/Typography/Heading.astro";
+import Paragraph from "@/components/Typography/Paragraph.astro";
+import ArchiveCard from "@/components/attakk/ArchiveCard.astro";
+import { getArchivedDrops } from "@/lib/catalog.ts";
+import type { DropWithProducts } from "@attakk/types";
+
+let drops: DropWithProducts[] = [];
+let unavailable = false;
+try {
+  drops = await getArchivedDrops();
+} catch (err) {
+  console.error("archive: catalogue read failed", err);
+  unavailable = true;
+}
+
+const notice = unavailable
+  ? "The archive is briefly unavailable. Please try again in a moment."
+  : drops.length === 0
+    ? "Nothing in the archive yet — past drops land here once they close."
+    : null;
+---
+
+<BaseLayout
+  title="Archive"
+  description="Past collections from attakk. Sold out, kept on the shelf — every drop keeps its page."
+  theme="light"
+>
+  <Section paddingTop="large" paddingBottom={notice ? "large" : "medium"}>
+    <Heading variant="h2" tag="h1">Archive</Heading>
+    <Paragraph variant="large" class="color-faded" maxWidth={36}>
+      Drops that have closed. Nothing here is for sale, but every collection
+      keeps its page — sold out is not gone.
+    </Paragraph>
+
+    {
+      notice ? (
+        <Paragraph variant="large" class="color-faded">
+          {notice}
+        </Paragraph>
+      ) : (
+        <div class="archive-grid">
+          {drops.map((drop) => (
+            <ArchiveCard drop={drop} />
+          ))}
+        </div>
+      )
+    }
+  </Section>
+</BaseLayout>
+
+<style>
+  @layer components {
+    /* Autofit so one past drop and a dozen take the same markup. */
+    .archive-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(20rem, 100%), 1fr));
+      gap: var(--space-5);
+      margin-top: var(--space-7);
+    }
+  }
+</style>

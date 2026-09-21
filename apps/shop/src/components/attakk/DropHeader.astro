@@ -1,0 +1,125 @@
+---
+/**
+ * DropHeader — a collection's masthead: its number and status, its name in the
+ * drop's marker face, and the tagline, body and note it carries. Reads the
+ * marker family and colours from the themed ancestor around it (a DropSection or
+ * a drop page's themed section), so it never styles itself per drop. Shared by
+ * the home rail and a drop's own page, which show the same collection identity.
+ */
+import type { Drop } from "@attakk/types";
+import Heading from "@/components/Typography/Heading.astro";
+
+interface Props {
+  drop: Drop;
+  /** Set to `false` to skip rendering. */
+  render?: boolean;
+  class?: string;
+}
+
+const { drop, render = true, class: className } = Astro.props;
+
+const no = String(drop.no).padStart(2, "0");
+const yearShort = String(drop.year).slice(2);
+const statusLabel = drop.status.charAt(0).toUpperCase() + drop.status.slice(1);
+---
+
+{
+  render && (
+    <div class:list={["drop_intro", className]}>
+      <p class="drop_eyebrow">
+        <span class="drop_number">{no}</span>
+        <span class="drop_status">{statusLabel}</span>
+      </p>
+
+      <p class="drop_marker">
+        {drop.name}
+        <span class="drop_marker-year">'{yearShort}</span>
+      </p>
+
+      {drop.tagline && (
+        <Heading tag="h2" variant="h3" class="drop_tagline margin-top-0">
+          {drop.tagline}
+        </Heading>
+      )}
+      {drop.body && <p class="drop_body">{drop.body}</p>}
+      {drop.note && <p class="drop_note">↳ {drop.note}</p>}
+    </div>
+  )
+}
+
+<style>
+  @layer components {
+    .drop_intro {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+      max-inline-size: 34rem;
+    }
+
+    .drop_eyebrow {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      margin: 0;
+    }
+
+    .drop_number {
+      font-family: var(--display-family);
+      font-weight: var(--primary-bold);
+      font-size: clamp(2.75rem, 2.3rem + 2.25vw, 4rem);
+      line-height: 0.8;
+      color: var(--heading-accent);
+    }
+
+    .drop_status {
+      padding: 0.25rem 0.5rem;
+      border: var(--border-width) solid currentColor;
+      border-radius: var(--radius-round);
+      font-family: var(--label-family);
+      font-size: 0.625rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    /* The collection name, in the drop's marker face, tilted like a scrawl. */
+    .drop_marker {
+      display: inline-block;
+      margin-top: calc(var(--space-2) * -1);
+      white-space: nowrap;
+      font-family: var(--marker-family);
+      font-weight: 400;
+      font-size: clamp(3.5rem, 2.2rem + 6.5vw, 8rem);
+      line-height: 0.9;
+      letter-spacing: 0.02em;
+      color: var(--heading-accent);
+      transform: rotate(-2deg);
+      transform-origin: left center;
+    }
+
+    .drop_marker-year {
+      display: inline-block;
+      margin-left: 0.3em;
+      font-family: var(--display-family);
+      font-size: 0.42em;
+      font-weight: var(--primary-bold);
+      letter-spacing: 0.06em;
+      color: var(--text);
+      vertical-align: top;
+      transform: rotate(2deg);
+    }
+
+    .drop_body {
+      margin: 0;
+      font-size: var(--text-small);
+      color: var(--text-2);
+    }
+
+    .drop_note {
+      margin: 0;
+      font-family: var(--label-family);
+      font-size: var(--label);
+      letter-spacing: var(--label-letter-spacing);
+      color: var(--text-2);
+    }
+  }
+</style>

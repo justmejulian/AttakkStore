@@ -1,0 +1,194 @@
+---
+/**
+ * ArchiveCard — one past collection in the archive grid, a link to that drop's
+ * page (which stays at its live URL and returns 200). Each tile is its own
+ * themed context: it carries the drop's light/dark base and colours, so the
+ * grid reads as a shelf of collections, each still looking like itself. The lead
+ * image is the first photo across the drop's pieces; a drop with none falls back
+ * to its marker name on the collection's own surface.
+ */
+import type { DropWithProducts } from "@attakk/types";
+import { dropThemeStyle } from "@/lib/drop-theme.ts";
+import { imageSrc, imageSrcset } from "@/lib/format.ts";
+
+interface Props {
+  drop: DropWithProducts;
+  /** Set to `false` to skip rendering. */
+  render?: boolean;
+}
+
+const { drop, render = true } = Astro.props;
+
+const style = dropThemeStyle(drop);
+const no = String(drop.no).padStart(2, "0");
+const count = drop.products.length;
+const countLabel = String(count).padStart(2, "0");
+
+// The lead image is the first photo the drop carries, in product then image
+// order; a drop with no photos yet shows its marker name instead. Stops at the
+// first product with a photo rather than flattening every image to take one.
+const lead = drop.products.find((p) => p.images.length > 0)?.images[0];
+---
+
+{
+  render && (
+    <a
+      class:list={["archive-card", `theme-${drop.theme_base}`]}
+      style={style}
+      href={`/drops/${drop.slug}`}
+      data-drop={drop.slug}
+    >
+      <div class="archive-card_media">
+        {lead ? (
+          <img
+            class="archive-card_photo"
+            src={imageSrc(lead)}
+            srcset={imageSrcset(lead)}
+            sizes="(max-width: 48rem) 90vw, 22rem"
+            width={lead.width}
+            height={lead.height}
+            alt={lead.alt}
+            loading="lazy"
+            decoding="async"
+            style={`background-image:url(${JSON.stringify(lead.placeholder)})`}
+          />
+        ) : (
+          <span class="archive-card_marker">{drop.name}</span>
+        )}
+        <span class="archive-card_no">N° {no}</span>
+      </div>
+
+      <div class="archive-card_body">
+        <div class="archive-card_head">
+          <span class="archive-card_name">
+            {drop.name} <span class="archive-card_year">{drop.year}</span>
+          </span>
+          <span class="archive-card_view">View →</span>
+        </div>
+        <p class="archive-card_meta">
+          <b>{countLabel}</b> {count === 1 ? "piece" : "pieces"} · archived
+        </p>
+      </div>
+    </a>
+  )
+}
+
+<style>
+  @layer components {
+    /* The tile paints itself from its collection's theme; the whole card is the
+       link to that drop's page. */
+    .archive-card {
+      display: flex;
+      flex-direction: column;
+      color: var(--text);
+      text-decoration: none;
+      background-color: var(--background);
+      border: var(--border-width) solid var(--border);
+      border-radius: var(--radius-main);
+      overflow: hidden;
+      transition:
+        transform var(--hover-duration) var(--hover-ease),
+        border-color var(--hover-duration) var(--hover-ease);
+    }
+
+    @media (hover: hover) {
+      .archive-card:hover {
+        transform: translateY(-0.1875rem);
+        border-color: var(--heading-accent);
+      }
+    }
+
+    /* A wide frame holding the lead photo or, with none, the marker name centred
+       on the collection's surface. */
+    .archive-card_media {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      aspect-ratio: 4 / 3;
+      padding: var(--space-5);
+      background-color: color-mix(in srgb, var(--text) 6%, transparent);
+    }
+
+    .archive-card_photo {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      background-size: cover;
+      background-position: center;
+    }
+
+    .archive-card_marker {
+      font-family: var(--marker-family);
+      font-size: clamp(2.5rem, 1.6rem + 4vw, 4rem);
+      line-height: 0.9;
+      color: var(--heading-accent);
+      transform: rotate(-2deg);
+      text-align: center;
+    }
+
+    .archive-card_no {
+      position: absolute;
+      top: var(--space-2);
+      right: var(--space-3);
+      z-index: 2;
+      font-family: var(--label-family);
+      font-size: 0.625rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-2);
+    }
+
+    .archive-card_body {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      padding: var(--space-4);
+    }
+
+    .archive-card_head {
+      display: flex;
+      flex-wrap: nowrap;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: var(--space-2);
+    }
+
+    .archive-card_name {
+      font-family: var(--display-family);
+      font-weight: var(--primary-bold);
+      font-size: var(--h5);
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    .archive-card_year {
+      color: var(--text-2);
+    }
+
+    .archive-card_view {
+      font-family: var(--label-family);
+      font-size: var(--label);
+      letter-spacing: var(--label-letter-spacing);
+      white-space: nowrap;
+    }
+
+    .archive-card_meta {
+      margin: 0;
+      font-family: var(--label-family);
+      font-size: 0.625rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-2);
+    }
+
+    .archive-card_meta b {
+      font-family: var(--display-family);
+      font-size: 1.125rem;
+      letter-spacing: 0;
+    }
+  }
+</style>
