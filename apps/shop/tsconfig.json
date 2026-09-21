@@ -8,6 +8,10 @@
     // condition the api and admin tsconfigs use. The production build resolves
     // it through the package's default export (dist) instead.
     "customConditions": ["source"],
+    // The cart islands are Preact .tsx; resolve their JSX to preact/jsx-runtime
+    // rather than Astro's default so the components type-check as Preact.
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
     "paths": {
       "@/*": ["./src/*"]
     }

@@ -4,6 +4,7 @@ import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, fontProviders } from "astro/config";
 import node from "@astrojs/node";
+import preact from "@astrojs/preact";
 import sitemap from "@astrojs/sitemap";
 import { SITE_URL } from "./src/consts.ts";
 import { isNoindexRoute } from "./src/utils/seo.ts";
@@ -101,6 +102,10 @@ export default defineConfig({
   output: "server",
   adapter: node({ mode: "standalone" }),
   integrations: [
+    // Preact powers the only interactive islands the storefront needs — the
+    // cart controls. Everything else stays server-rendered markup; a control is
+    // hydrated only when it earns it.
+    preact(),
     viteDevtools(),
     mockUploads(),
     sitemap({

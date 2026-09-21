@@ -5,6 +5,7 @@
  * the links are the whole nav, and the current one is marked server-side.
  */
 import { SITE_NAME } from "@/consts.ts";
+import CartCount from "@/components/attakk/CartCount.tsx";
 
 interface Props {
   /** Set to `false` to skip rendering this component and its children. */
@@ -59,7 +60,8 @@ const current = (href: string) =>
             EN
           </span>
           <a class="nav_link" href="/cart">
-            Cart&nbsp;<span class="nav_count">[00]</span>
+            Cart&nbsp;
+            <CartCount client:load />
           </a>
         </div>
       </div>
@@ -80,7 +82,8 @@ const current = (href: string) =>
         Club
       </a>
       <a class="nav_link" href="/cart">
-        Cart&nbsp;<span class="nav_count">[00]</span>
+        Cart&nbsp;
+        <CartCount client:load />
       </a>
     </nav>
   )
