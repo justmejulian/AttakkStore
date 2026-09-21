@@ -55,3 +55,16 @@ test("getProductBySlug respects both product and drop visibility", () => {
   assert.equal(getProductBySlug("secret-prod"), undefined); // live product in a draft drop
   assert.equal(getProductBySlug("nope"), undefined); // missing
 });
+
+test("getProductBySlug carries the drop the product belongs to", () => {
+  // The page themes and decides purchasability from the embedded drop, so it must
+  // be the product's own — a live one for the jersey, the archived one for the
+  // tee, which is how the page knows the piece cannot be bought.
+  const jersey = getProductBySlug("redline-jersey");
+  assert.equal(jersey?.drop.slug, "redline");
+  assert.equal(jersey?.drop.status, "live");
+
+  const tee = getProductBySlug("origins-tee");
+  assert.equal(tee?.drop.slug, "origins");
+  assert.equal(tee?.drop.status, "archived");
+});

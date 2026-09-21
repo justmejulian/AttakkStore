@@ -7,6 +7,7 @@ import type {
   OrderListRow,
   OrderWithItems,
   ProductImage,
+  ProductWithDrop,
   Settings,
 } from "@attakk/types";
 
@@ -351,6 +352,16 @@ export const adminDrops: Drop[] = allDrops.map((drop) => {
   void products; // the admin drops list is the bare rows; products load elsewhere
   return row;
 });
+
+// GET /products/:slug — the storefront's single-product read: the jersey plus
+// the bare drop it belongs to, the inverse of the list embed (a drop carrying
+// its products). Its page needs the drop for the collection theme, the
+// archived/not-purchasable state and a link back to the collection. The admin's
+// edit-form read (jerseyProduct) is the drop-less ProductWithSizes.
+export const jerseyProductDetail: ProductWithDrop = {
+  ...jerseyProduct,
+  drop: adminDrops.find((d) => d.id === redlineDrop.id)!,
+};
 
 /* ---------------------------------------------------------- admin products */
 

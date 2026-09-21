@@ -3,6 +3,7 @@ import type {
   DropWithProducts,
   Product,
   ProductSize,
+  ProductWithDrop,
   ProductWithSizes,
 } from "@attakk/types";
 import { db } from "../db.js";
@@ -60,6 +61,14 @@ const productBySlugStmt = db.prepare(
      )`,
 );
 
+// The drop a product read attaches to itself. Keyed by id, any status: the
+// product query above already proved the drop is live or archived, so this only
+// ever reads a drop that exists and is public — it is the same row, fetched by
+// the foreign key the product carries.
+const dropByIdStmt = db.prepare(
+  `SELECT ${DROP_COLUMNS} FROM drops WHERE id = ?`,
+);
+
 const sizesForProductStmt = db.prepare(
   `SELECT id, label, sort FROM product_sizes
    WHERE product_id = ? ORDER BY sort, id`,
@@ -91,7 +100,19 @@ export function getDropBySlug(slug: string): DropWithProducts | undefined {
   return drop ? withProducts(drop) : undefined;
 }
 
-export function getProductBySlug(slug: string): ProductWithSizes | undefined {
+export function getProductBySlug(slug: string): ProductWithDrop | undefined {
   const product = productBySlugStmt.get(slug) as Product | undefined;
-  return product ? withSizes(product) : undefined;
+  if (!product) return undefined;
+  // The product query filters on the drop being live or archived, so the drop
+  // should always be found — the page needs it for the collection's theme and
+  // whether the piece can be bought. Guard it so an FK inconsistency fails loudly
+  // (the route turns a throw into a 500) rather than serving a ProductWithDrop
+  // whose drop is silently missing.
+  const drop = dropByIdStmt.get(product.drop_id) as Drop | undefined;
+  if (!drop) {
+    throw new Error(
+      `product ${product.slug} references missing drop ${product.drop_id}`,
+    );
+  }
+  return { ...withSizes(product), drop };
 }

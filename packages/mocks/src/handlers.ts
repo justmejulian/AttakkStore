@@ -88,8 +88,18 @@ const dropSlugs = new Set(adminDrops.map((d) => d.slug));
 // is stateless, so it returns this fixed, obviously-synthetic id, distinct from
 // any seeded drop's (and from the product and size synthetics below).
 const MOCK_NEW_DROP_ID = 800;
-const productsBySlug = new Map(
-  allDrops.flatMap((d) => d.products).map((p) => [p.slug, p] as const),
+
+// The storefront's single-product read, by slug: each product with the bare drop
+// it belongs to attached, mirroring the API's getProductBySlug. The bare drop
+// comes from dropsById (the adminDrops projection) so the handler and the
+// jerseyProductDetail fixture source it from one definition. Built from allDrops
+// so a fixture product reaches this read without touching the handler.
+const productDetailBySlug = new Map(
+  allDrops.flatMap((d) =>
+    d.products.map(
+      (p) => [p.slug, { ...p, drop: dropsById.get(d.id)! }] as const,
+    ),
+  ),
 );
 
 // Stored orders by id, for the admin's detail, status and note handlers. The
@@ -348,7 +358,7 @@ export const handlers = [
   }),
 
   http.get("*/products/:slug", ({ params }) => {
-    const product = productsBySlug.get(String(params.slug));
+    const product = productDetailBySlug.get(String(params.slug));
     return product
       ? HttpResponse.json(product)
       : HttpResponse.json({ error: "not_found" }, { status: 404 });

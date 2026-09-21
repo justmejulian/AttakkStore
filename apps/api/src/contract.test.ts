@@ -11,6 +11,7 @@ import {
   createdOrder,
   duplicateVariantRejection,
   jerseyProduct,
+  jerseyProductDetail,
   liveDrops,
   orderRequest,
   originsDrop,
@@ -163,10 +164,13 @@ test("GET /drops/:slug is 404 for an unknown slug", async () => {
   assert.deepEqual(await res.json(), { error: "not_found" });
 });
 
-test("GET /products/:slug returns the product fixture verbatim", async () => {
+test("GET /products/:slug returns the product-with-drop fixture verbatim", async () => {
+  // The storefront's single-product read carries the bare drop the product
+  // belongs to alongside it (jerseyProductDetail), the shape its page themes and
+  // decides purchasability from — not the drop-less admin read (jerseyProduct).
   const res = await catalog.request("/products/redline-jersey");
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), jerseyProduct);
+  assert.deepEqual(await res.json(), jerseyProductDetail);
 });
 
 test("POST /orders returns the created-order fixture, bar the generated fields", async () => {

@@ -136,6 +136,17 @@ export interface DropWithProducts extends Drop {
   products: ProductWithSizes[];
 }
 
+// One product read for its storefront page: the full product plus the bare drop
+// it belongs to (a Drop, not a DropWithProducts, so there is no cycle). The page
+// needs the drop the product row alone does not carry — its colours and font for
+// the collection theme, its status (an archived drop keeps its pieces visible but
+// they cannot be bought) and its name and slug for a link back to the collection.
+// The list reads embed products inside a drop; this single read embeds the drop
+// inside the product, the inverse.
+export interface ProductWithDrop extends ProductWithSizes {
+  drop: Drop;
+}
+
 // A product as the admin's products list shows it: the row itself, plus the drop
 // it belongs to (name and status — enough to group the flat list and hint which
 // pieces are live) and ordered_count, the number of units ordered across

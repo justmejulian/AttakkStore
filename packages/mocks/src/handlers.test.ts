@@ -10,6 +10,7 @@ import {
   archivedDrops,
   createdOrder,
   jerseyProduct,
+  jerseyProductDetail,
   liveDrops,
   orderListRows,
   paidOrder,
@@ -81,8 +82,10 @@ test("GET /drops/:slug serves a known slug and 404s an unknown one", async () =>
   assert.deepEqual(await miss.json(), { error: "not_found" });
 });
 
-test("GET /products/:slug serves a known slug and 404s an unknown one", async () => {
-  assert.equal((await fetch(`${base}/products/redline-jersey`)).status, 200);
+test("GET /products/:slug serves the product-with-drop and 404s an unknown one", async () => {
+  const res = await fetch(`${base}/products/redline-jersey`);
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), jerseyProductDetail);
   assert.equal((await fetch(`${base}/products/nope`)).status, 404);
 });
 
