@@ -1,0 +1,95 @@
+---
+/**
+ * Hero — the home page's manifesto. A metadata strip over a two-line headline
+ * whose second line is set in the marker face, then a lede beside the call to
+ * action. Only the live-drop count changes per render, so it arrives as a prop;
+ * the copy is the home page's and stays written here.
+ */
+import Section from "@/components/Wrapper/Section.astro";
+import Heading from "@/components/Typography/Heading.astro";
+import Paragraph from "@/components/Typography/Paragraph.astro";
+import Button from "@/components/Button.astro";
+import ButtonWrapper from "@/components/Wrapper/ButtonWrapper.astro";
+
+interface Props {
+  /** The current live-drop tally, e.g. "3 drops live · no restocks". */
+  liveLabel: string;
+  /** Where the call to action points. Defaults to the drops section. */
+  ctaHref?: string;
+}
+
+const { liveLabel, ctaHref = "#drops" } = Astro.props;
+---
+
+<Section class="hero_wrap" paddingTop="large" gap="6">
+  <p class="hero_meta label color-faded">
+    <span>Zürich, CH · 47.3769°N 8.5417°E</span>
+    <span>Friends + family only</span>
+    <span>{liveLabel}</span>
+  </p>
+
+  <Heading tag="h1" variant="display" class="margin-top-0">
+    Built in a basement.<br /><em class="hero_script">Worn on the road.</em>
+  </Heading>
+
+  <div class="hero_lede">
+    <Paragraph variant="large" class="margin-top-0" maxWidth={48}>
+      attakk is a gym in Zürich and a small uniform brand for the people who
+      train there. Every drop is a uniform for a season we've actually lived.
+    </Paragraph>
+    <ButtonWrapper class="hero_actions">
+      <Button element="link" href={ctaHref}>Shop the current drop</Button>
+      <span class="label color-faded">No restocks · sizes go fast</span>
+    </ButtonWrapper>
+  </div>
+</Section>
+
+<style is:global>
+  @layer components {
+    /* The metadata strip: short credential lines with a hairline under them,
+       wrapping to their own lines on a narrow screen. Type comes from .label. */
+    .hero_meta {
+      display: flex;
+      flex-flow: row wrap;
+      gap: var(--space-1) var(--space-4);
+      margin: 0;
+      padding-bottom: var(--space-4);
+      border-bottom: var(--border-width) solid
+        color-mix(in srgb, var(--text) 18%, transparent);
+    }
+
+    /* The second line of the manifesto, in the marker face, tilted like a
+       scrawl — the drop marker's gesture, borrowed for the headline. */
+    .hero_script {
+      display: inline-block;
+      font-family: var(--marker-family);
+      font-style: normal;
+      font-weight: 400;
+      color: var(--heading-accent);
+      transform: rotate(-2deg);
+    }
+
+    /* The lede and its call to action, side by side on a wide page and stacked
+       when the room runs out. */
+    .hero_lede {
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+      gap: var(--space-6);
+      align-items: end;
+    }
+
+    @media (width < 48rem) {
+      .hero_lede {
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--space-4);
+      }
+    }
+
+    .hero_actions {
+      display: flex;
+      flex-direction: column;
+      align-items: start;
+      gap: var(--space-3);
+    }
+  }
+</style>

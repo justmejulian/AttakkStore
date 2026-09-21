@@ -1,0 +1,46 @@
+---
+/**
+ * Interstitial — the rule between two collections on the home page: a centred
+ * line naming the drop that just ended and the one coming next, with a hairline
+ * running out to either side. Stands on its own between DropSections rather than
+ * inside a Section, so it carries the site-width container itself.
+ */
+interface Props {
+  /** The number of the collection above, shown padded (e.g. 3 → "03"). */
+  endNo: number;
+  /** The name of the next collection, e.g. "Redline 2026". */
+  nextLabel: string;
+}
+
+const { endNo, nextLabel } = Astro.props;
+const no = String(endNo).padStart(2, "0");
+---
+
+<div class="container interstitial_wrap">
+  <span class="interstitial_rule" aria-hidden="true"></span>
+  <span class="interstitial_label label">End N° {no} ↓ Next — {nextLabel}</span>
+  <span class="interstitial_rule" aria-hidden="true"></span>
+</div>
+
+<style is:global>
+  @layer components {
+    .interstitial_wrap {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      padding-block: var(--space-6);
+      color: var(--text-2);
+    }
+
+    .interstitial_rule {
+      flex: 1;
+      height: var(--border-width);
+      background-color: color-mix(in srgb, var(--text) 18%, transparent);
+    }
+
+    .interstitial_label {
+      flex: 0 0 auto;
+      text-align: center;
+    }
+  }
+</style>

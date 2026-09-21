@@ -12,6 +12,16 @@
   margin-top: 0;
 }
 
+/* Small uppercase label type — eyebrows, credential strips, metadata rows.
+   A primitive so nothing re-declares the family, size, spacing and case; a
+   component carries it beside its own class and overrides only what differs. */
+.label {
+  font-family: var(--label-family);
+  font-size: var(--label);
+  letter-spacing: var(--label-letter-spacing);
+  text-transform: uppercase;
+}
+
 .section {
   padding-top: var(--section-space-medium);
   padding-bottom: var(--section-space-medium);

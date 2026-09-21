@@ -1,0 +1,89 @@
+---
+/**
+ * MarqueeStrip — an inverted band of short uppercase items, each trailed by a
+ * dot, scrolling across the page. The motion is the shared `Marquee`; this owns
+ * the band chrome and the item type. Two instances use it: the site Ticker
+ * above the nav, and the home page's credential strip. The items travel as a
+ * prop because they differ per instance; everything visual is the same.
+ *
+ * The pace is set inline as `--_speed`, which beats Marquee's own default
+ * regardless of stylesheet order. `border` picks whether the band is ruled on
+ * one edge (the ticker, sitting under nothing) or both (a strip mid-page).
+ */
+import Marquee from "@/components/Interactive/Marquee.astro";
+
+interface Props {
+  /** The short lines the band carries. */
+  items: string[];
+  /** What the strip holds, for anyone who cannot see it. */
+  label?: string;
+  /** How long one loop takes. Slower reads calmer. Defaults to `9s`. */
+  speed?: string;
+  /** Rule one edge (`bottom`, default) or both (`block`). */
+  border?: "bottom" | "block";
+  /** Set to `false` to skip rendering. */
+  render?: boolean;
+  class?: string;
+}
+
+const {
+  items,
+  label = "Marquee",
+  speed = "9s",
+  border = "bottom",
+  render = true,
+  class: className,
+} = Astro.props;
+---
+
+{
+  render && (
+    <Marquee
+      class:list={[
+        "marquee-strip_wrap",
+        "theme-invert",
+        border === "block" && "is-banded",
+        className,
+      ]}
+      style={`--_speed:${speed}`}
+      label={label}
+    >
+      {items.map((item) => (
+        <span class="marquee-strip_item label">
+          {item}
+          <span class="marquee-strip_dot" aria-hidden="true">
+            ●
+          </span>
+        </span>
+      ))}
+    </Marquee>
+  )
+}
+
+<style is:global>
+  @layer components {
+    .marquee-strip_wrap {
+      padding-block: var(--space-2);
+      background-color: var(--background);
+      color: var(--text);
+      border-bottom: var(--border-width) solid var(--text);
+    }
+
+    /* Ruled on both edges, for a strip that sits between sections rather than
+       at the very top of the page. */
+    .marquee-strip_wrap.is-banded {
+      border-top: var(--border-width) solid var(--text);
+    }
+
+    .marquee-strip_item {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-4);
+      font-weight: var(--primary-medium);
+    }
+
+    .marquee-strip_dot {
+      color: var(--heading-accent);
+    }
+  }
+</style>

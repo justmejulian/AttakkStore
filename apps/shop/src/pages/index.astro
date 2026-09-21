@@ -1,40 +1,97 @@
 ---
-import Layout from "@/layouts/BaseLayout.astro";
+/**
+ * Home — the shop. A manifesto hero, a credential strip, then the live
+ * collections in the API's order, each its own themed DropSection with an
+ * interstitial rule between them. The archive is its own route (step 20).
+ *
+ * The catalogue is read at request time. When the API can't be reached the page
+ * still renders its chrome and shows a brief notice where the drops would be —
+ * the front door never 500s because the backend hiccuped. The plan's
+ * last-known-good cache lands later, with the backend cache deferred from
+ * step 9.
+ */
+import BaseLayout from "@/layouts/BaseLayout.astro";
 import Section from "@/components/Wrapper/Section.astro";
-import Heading from "@/components/Typography/Heading.astro";
-import Eyebrow from "@/components/Typography/Eyebrow.astro";
-import Img from "@/components/Media/Img.astro";
-import lumos_background from "@/assets/graphics/lumos-background.svg";
-import Icon from "@/components/Media/Icon.astro";
-import logo_icon from "@/assets/logo/logo-icon.svg";
-import ContentWrapper from "@/components/Wrapper/ContentWrapper.astro";
+import Paragraph from "@/components/Typography/Paragraph.astro";
+import Hero from "@/components/attakk/Hero.astro";
+import MarqueeStrip from "@/components/attakk/MarqueeStrip.astro";
+import DropSection from "@/components/attakk/DropSection.astro";
+import Interstitial from "@/components/attakk/Interstitial.astro";
+import { getLiveDrops } from "@/lib/catalog.ts";
+import type { DropWithProducts } from "@attakk/types";
+
+let drops: DropWithProducts[] = [];
+let unavailable = false;
+try {
+  drops = await getLiveDrops();
+} catch (err) {
+  console.error("home: catalogue read failed", err);
+  unavailable = true;
+}
+
+const liveCount = drops.length;
+const liveLabel =
+  liveCount === 1
+    ? "1 drop live · no restocks"
+    : `${liveCount} drops live · no restocks`;
+
+// One notice covers both empty states: the catalogue couldn't be read, or it
+// was read and holds nothing live. Null when there are drops to show.
+const notice = unavailable
+  ? "The store is briefly unavailable. Please try again in a moment."
+  : liveCount === 0
+    ? "No drops are live right now — the next one is on its way."
+    : null;
+
+// Chrome, not content — evergreen claims that don't go stale between drops,
+// mirroring the Ticker's items rather than travelling as data.
+const credentials = [
+  "Est. 2023",
+  "No restocks",
+  "Built by members",
+  "Ships worldwide",
+];
+
+// The next collection's name for an interstitial, with the stored newlines in a
+// drop name flattened to spaces so the rule reads on one line.
+const nextName = (drop: DropWithProducts) =>
+  `${drop.name.split("\n").join(" ")} ${drop.year}`;
 ---
 
-<Layout theme="dark">
-  <Section
-    paddingBottom="even"
-    containerClass="flex-grow"
-    paddingTop="even"
-    class="flex-grow min-height-screen-nav"
-  >
-    <ContentWrapper
-      class="flex-grow theme-brand"
-      variant="card"
-      mediaOpacity={100}
-    >
-      <Icon src={logo_icon} variant="large" />
-      <Heading variant="display" tag="h1" class="margin-block-8"
-        >Style Guide</Heading
-      >
-      <Eyebrow variant="tag">v0.0.3</Eyebrow>
-      <Img
-        slot="column2"
-        src={lumos_background}
-        width={1920}
-        height={1080}
-        loading="eager"
-        fetchPriority="high"
-      />
-    </ContentWrapper>
-  </Section>
-</Layout>
+<BaseLayout
+  title="ATTAKK Studios — Store"
+  description="attakk is a private gym in Zürich and a small uniform brand for the people who train there."
+  theme="light"
+>
+  <Hero liveLabel={liveLabel} />
+
+  <MarqueeStrip
+    items={credentials}
+    label="Credentials"
+    speed="30s"
+    border="block"
+  />
+
+  <div id="drops">
+    {
+      notice && (
+        <Section paddingTop="large" paddingBottom="large">
+          <Paragraph variant="large" class="color-faded">
+            {notice}
+          </Paragraph>
+        </Section>
+      )
+    }
+
+    {
+      drops.map((drop, i) => (
+        <>
+          <DropSection drop={drop} />
+          {i < drops.length - 1 && (
+            <Interstitial endNo={drop.no} nextLabel={nextName(drops[i + 1]!)} />
+          )}
+        </>
+      ))
+    }
+  </div>
+</BaseLayout>
