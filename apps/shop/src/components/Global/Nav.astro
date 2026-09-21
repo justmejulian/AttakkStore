@@ -22,7 +22,7 @@ const { render = true, overlap = false } = Astro.props;
 
 const links = [
   { href: "/", label: "Shop" },
-  { href: "/drops", label: "Drops" },
+  { href: "/#drops", label: "Drops" },
   { href: "/club", label: "The Club" },
   { href: "/archive", label: "Archive" },
 ];
@@ -75,7 +75,7 @@ const current = (href: string) =>
       <a class="nav_link" href="/" aria-current={current("/")}>
         Home
       </a>
-      <a class="nav_link" href="/drops" aria-current={current("/drops")}>
+      <a class="nav_link" href="/#drops">
         Drops
       </a>
       <a class="nav_link" href="/club" aria-current={current("/club")}>
