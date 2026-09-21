@@ -6,7 +6,7 @@ import { openTempApi, seedCatalog } from "../test-support.js";
 // repository prepares its statements against the singleton at import time.
 const { db, cleanup } = await openTempApi();
 seedCatalog(db);
-const { getDropBySlug, getProductBySlug, listLiveDrops } =
+const { getDropBySlug, getProductBySlug, listArchivedDrops, listLiveDrops } =
   await import("./catalog.js");
 
 after(() => cleanup());
@@ -31,6 +31,13 @@ test("sizes come back ordered by sort, not insertion order", () => {
   assert.deepEqual(
     redline.products[0].sizes.map((s) => s.label),
     ["S", "M", "L"],
+  );
+});
+
+test("listArchivedDrops returns only archived drops", () => {
+  assert.deepEqual(
+    listArchivedDrops().map((d) => d.slug),
+    ["origins"],
   );
 });
 

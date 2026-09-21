@@ -175,6 +175,10 @@ export const originsDrop: DropWithProducts = {
 // GET /drops — the live collections only, so the archived drop is absent.
 export const liveDrops: DropWithProducts[] = [redlineDrop];
 
+// GET /archive — the archived collections only, the mirror of liveDrops that
+// feeds the shop's archive grid. A drop that has ended keeps its pieces here.
+export const archivedDrops: DropWithProducts[] = [originsDrop];
+
 // GET /products/:slug — the single-product read, the same shape carried inside a
 // drop's `products`.
 export const jerseyProduct = redlineDrop.products[0];

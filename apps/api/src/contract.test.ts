@@ -7,6 +7,7 @@ import {
   adminUserDeactivated,
   adminUsers,
   allDrops,
+  archivedDrops,
   createdOrder,
   duplicateVariantRejection,
   jerseyProduct,
@@ -138,6 +139,12 @@ test("GET /drops returns the live-collections fixture verbatim", async () => {
   const res = await catalog.request("/drops");
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), liveDrops);
+});
+
+test("GET /archive returns the archived-drops fixture verbatim", async () => {
+  const res = await catalog.request("/archive");
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), archivedDrops);
 });
 
 test("GET /drops/:slug returns the live and archived drop fixtures verbatim", async () => {

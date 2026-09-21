@@ -21,6 +21,16 @@ test("GET /drops serves 200 and the live collections as JSON", async () => {
   );
 });
 
+test("GET /archive serves 200 and the archived collections as JSON", async () => {
+  const res = await catalog.request("/archive");
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { slug: string }[];
+  assert.deepEqual(
+    body.map((d) => d.slug),
+    ["origins"],
+  );
+});
+
 test("GET /drops/:slug is 200 for an archived drop and 404 for a draft one", async () => {
   assert.equal((await catalog.request("/drops/origins")).status, 200);
   assert.equal((await catalog.request("/drops/secret")).status, 404);

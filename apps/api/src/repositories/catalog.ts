@@ -31,6 +31,13 @@ const liveDropsStmt = db.prepare(
   `SELECT ${DROP_COLUMNS} FROM drops WHERE status = 'live' ORDER BY sort, id`,
 );
 
+// The archived collections, for the shop's archive grid. A drop that has ended
+// keeps its page and its pieces; this is just the same read narrowed to the
+// status the live one excludes, in the same sort order.
+const archivedDropsStmt = db.prepare(
+  `SELECT ${DROP_COLUMNS} FROM drops WHERE status = 'archived' ORDER BY sort, id`,
+);
+
 // Live or archived, never draft: an archived drop keeps its URL and returns
 // 200 with its pieces, so both the drop page and the archive page read from
 // here. Purchasability is the drop's status, which the shop decides.
@@ -73,6 +80,10 @@ function withProducts(drop: Drop): DropWithProducts {
 
 export function listLiveDrops(): DropWithProducts[] {
   return (liveDropsStmt.all() as Drop[]).map(withProducts);
+}
+
+export function listArchivedDrops(): DropWithProducts[] {
+  return (archivedDropsStmt.all() as Drop[]).map(withProducts);
 }
 
 export function getDropBySlug(slug: string): DropWithProducts | undefined {

@@ -22,6 +22,7 @@ import {
   adminUsers,
   allDrops,
   allOrders,
+  archivedDrops,
   createdOrder,
   liveDrops,
   orderListRows,
@@ -223,6 +224,8 @@ export const handlers = [
   }),
 
   http.get("*/drops", () => HttpResponse.json(liveDrops)),
+
+  http.get("*/archive", () => HttpResponse.json(archivedDrops)),
 
   http.get("*/drops/:slug", ({ params }) => {
     const drop = dropsBySlug.get(String(params.slug));

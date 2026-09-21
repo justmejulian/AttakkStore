@@ -7,6 +7,7 @@ import {
   adminProducts,
   adminUser,
   adminUsers,
+  archivedDrops,
   createdOrder,
   jerseyProduct,
   liveDrops,
@@ -64,6 +65,12 @@ test("GET /drops returns the live collections", async () => {
   const res = await fetch(`${base}/drops`);
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), liveDrops);
+});
+
+test("GET /archive returns the archived collections", async () => {
+  const res = await fetch(`${base}/archive`);
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), archivedDrops);
 });
 
 test("GET /drops/:slug serves a known slug and 404s an unknown one", async () => {
