@@ -22,32 +22,39 @@ import type {
 // repository's own tests, not this fixture's job — what this pins is the shape
 // and values a live catalogue hands the shop.
 
+// Real derivatives + placeholders, generated from the old site's actual Stripe
+// product photos so mock mode shows real product imagery: the webp files live
+// in packages/mocks/uploads and a dev-only shop middleware serves them at
+// /uploads. hash/width/placeholder mirror the API's images.ts contract
+// (sha256 slice16; {hash}-{w}.webp; 20px-blur placeholder).
 const jerseyImages: ProductImage[] = [
   {
     id: 1000,
-    hash: "a1b2c3d4e5f60718",
-    ext: "webp",
+    hash: "a1653ca52822583c",
+    ext: "jpg",
     alt: "Redline jersey, front",
-    placeholder: "data:image/webp;base64,UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQ",
-    width: 1600,
+    placeholder:
+      "data:image/webp;base64,UklGRmoAAABXRUJQVlA4IF4AAACwBACdASoUABQAPu1gqE4ppSOiMBgMATAdiWgAuwAQ6WWgO9K2e+VQ6WiDEtxoAP7zcAiKqjGdbNZY2BcuFo/Z1YLujmTRKKlbXCrY7KFuHLfps30adwTOQ1eTQAAA",
+    width: 2000,
     height: 2000,
     sort: 0,
   },
   {
     id: 1001,
-    hash: "0f9e8d7c6b5a4938",
-    ext: "avif",
+    hash: "9bc1f318d4493b4d",
+    ext: "jpg",
     alt: "Redline jersey, back",
-    placeholder: "data:image/webp;base64,UklGRh4AAABXRUJQVlA4TBEAAAAvAAAAEBcQ",
-    width: 1600,
+    placeholder:
+      "data:image/webp;base64,UklGRmYAAABXRUJQVlA4IFoAAABQBACdASoUABQAPulep02pJSOiN/VYASAdCWMAAC3jOpg628yA+FN0JCqAAP7zcAiKqglJtzA7iHiNiSkD1hJB/H9jZPVAgHBQvSmIifacxDQNJQH0omjIhAA=",
+    width: 2000,
     height: 2000,
     sort: 1,
   },
 ];
 
-// A live drop with two products: the jersey has sizes and photos, the cap has
-// neither — the empty-arrays case the shop renders with its size-less buy button
-// and silhouette fallback.
+// A live drop with two products: the jersey has sizes, the cap has none — the
+// size-less buy-button case the shop still renders. Both carry photos (the cap
+// stands in with an accessory shot; the Stripe catalogue has no cap).
 export const redlineDrop: DropWithProducts = {
   id: 1,
   slug: "redline",
@@ -98,7 +105,19 @@ export const redlineDrop: DropWithProducts = {
       status: "live",
       sort: 1,
       sizes: [],
-      images: [],
+      images: [
+        {
+          id: 1010,
+          hash: "37915bc52af7b972",
+          ext: "jpg",
+          alt: "Redline cap",
+          placeholder:
+            "data:image/webp;base64,UklGRk4AAABXRUJQVlA4IEIAAAAQBACdASoUABQAPu1qq1EppaOiqAqpMB2JaQAALnZo+B7nHPj+5HvwAAD+82+huyxjvceUTMMKfEfGyo+zie3sAAA=",
+          width: 2000,
+          height: 2000,
+          sort: 0,
+        },
+      ],
     },
   ],
 };
@@ -136,7 +155,19 @@ export const originsDrop: DropWithProducts = {
       status: "live",
       sort: 0,
       sizes: [{ id: 120, label: "One Size", sort: 0 }],
-      images: [],
+      images: [
+        {
+          id: 1020,
+          hash: "6c9f2a107c2c097d",
+          ext: "jpg",
+          alt: "Origins tee",
+          placeholder:
+            "data:image/webp;base64,UklGRl4AAABXRUJQVlA4IFIAAACwAwCdASoUABQAPu1am02ppKIiN/VRMB2JaQAALfUhl8ATbmeCAAD+8278Ft1+CJFrWygwyLWeX1bAW90QLhYmbp9NpMTguGO02K+o3Z7wAAAA",
+          width: 2000,
+          height: 2000,
+          sort: 0,
+        },
+      ],
     },
   ],
 };
