@@ -4,8 +4,6 @@ export interface SeoProps {
   title?: string;
   /** Meta description, also used for `og:description` and `twitter:description`. Defaults to `SITE_DESCRIPTION`. */
   description?: string;
-  /** Social share image. Defaults to `/og-image.jpg`. Relative paths resolve against `site` in `astro.config.mjs`. */
-  image?: string;
   /** Open Graph type. Defaults to `website`; use `article` for posts and news pages. */
   type?: "website" | "article";
   /**
