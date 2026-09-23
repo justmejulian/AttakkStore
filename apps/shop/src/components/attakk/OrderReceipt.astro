@@ -1,0 +1,200 @@
+---
+import type { OrderStatus, ReceiptOrder } from "@attakk/types";
+import Heading from "@/components/Typography/Heading.astro";
+import { formatFrancs } from "@/lib/format.ts";
+
+interface Props {
+  /** Set to `false` to skip rendering this component and its children. */
+  render?: boolean;
+  /** The token-authorized order returned by the API. */
+  order: ReceiptOrder;
+}
+
+const { render = true, order } = Astro.props;
+
+// The receipt URL is emailed and meant to be kept, so the page has to answer
+// for the order as it stands now rather than only as it was placed: someone
+// reopening their link after the admin marked it paid must not still be told to
+// pay the bill, and a cancelled order must say so rather than wait for pieces
+// that are not being made.
+const copy: Record<
+  OrderStatus,
+  { heading: string; lede: string; next: string; steps: string[] }
+> = {
+  pending: {
+    heading: "Your order is in.",
+    lede: "We sent the Swiss QR bill to",
+    next: "What happens next",
+    steps: [
+      "Open the email with your QR bill attached.",
+      "Scan and pay it with your banking app.",
+      "We make your pieces and let you know when they’re ready for pickup at ATTAKK HQ, usually in 6–10 weeks.",
+    ],
+  },
+  paid: {
+    heading: "Payment received.",
+    lede: "Nothing more to pay. We confirmed this order to",
+    next: "What happens next",
+    steps: [
+      "We make your pieces.",
+      "We let you know when they’re ready for pickup at ATTAKK HQ, usually in 6–10 weeks from the order.",
+    ],
+  },
+  cancelled: {
+    heading: "This order was cancelled.",
+    lede: "Nothing is owed on it. It was placed with",
+    next: "If that’s a surprise",
+    steps: [
+      "Write to us with the order number below and we’ll sort it out.",
+      "Any QR bill you were sent for it can be ignored.",
+    ],
+  },
+};
+const { heading, lede, next, steps } = copy[order.status];
+---
+
+{
+  render && (
+    <div class="receipt_wrap">
+      <div class="receipt_intro">
+        <p class="receipt_kicker">Order {order.reference}</p>
+        <Heading tag="h1" variant="h2" class="margin-top-0">
+          {heading}
+        </Heading>
+        <p class="receipt_lede">
+          {lede} <strong>{order.email}</strong>.
+        </p>
+      </div>
+
+      <div class="receipt_layout">
+        <section class="receipt_panel" aria-labelledby="receipt-summary">
+          <h2 id="receipt-summary" class="text-style-h3">
+            Order summary
+          </h2>
+          <ul class="receipt_list">
+            {order.items.map((item) => (
+              <li class="receipt_item">
+                <span>
+                  <strong>{item.title}</strong>
+                  <small>
+                    {item.size_label ?? "One size"} · Qty {item.qty}
+                  </small>
+                </span>
+                <span>
+                  CHF {formatFrancs(item.unit_price_rappen * item.qty)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div class="receipt_total">
+            <span>Total</span>
+            <strong>CHF {formatFrancs(order.total_rappen)}</strong>
+          </div>
+        </section>
+
+        <aside
+          class="receipt_panel receipt_next"
+          aria-labelledby="receipt-next"
+        >
+          <h2 id="receipt-next" class="text-style-h3">
+            {next}
+          </h2>
+          <ol>
+            {steps.map((step) => (
+              <li>{step}</li>
+            ))}
+          </ol>
+          <p class="receipt_note">
+            Keep order number <strong>{order.reference}</strong> if you need to
+            get in touch.
+          </p>
+        </aside>
+      </div>
+
+      <a class="receipt_home" href="/">
+        ← Back to the store
+      </a>
+    </div>
+  )
+}
+
+<style is:global>
+  @layer components {
+    .receipt_wrap {
+      display: grid;
+      gap: var(--space-7);
+      width: 100%;
+    }
+    .receipt_intro {
+      max-width: 48rem;
+    }
+    .receipt_kicker,
+    .receipt_item small {
+      display: block;
+      font-family: var(--label-family);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+    }
+    .receipt_kicker {
+      margin-bottom: var(--space-4);
+    }
+    .receipt_lede {
+      margin-top: var(--space-5);
+      font-size: var(--text-large);
+    }
+    .receipt_layout {
+      display: grid;
+      gap: var(--space-6);
+      @media (width >= 48rem) {
+        grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+      }
+    }
+    .receipt_panel {
+      display: grid;
+      align-content: start;
+      gap: var(--space-5);
+      padding: var(--space-5);
+      border: 0.125rem solid currentColor;
+    }
+    .receipt_next {
+      background: var(--background-2);
+    }
+    .receipt_next ol {
+      display: grid;
+      gap: var(--space-3);
+      margin: 0;
+      padding-left: 1.5em;
+    }
+    .receipt_list {
+      display: grid;
+      gap: var(--space-4);
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+    .receipt_item,
+    .receipt_total {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--space-4);
+    }
+    .receipt_item small {
+      margin-top: var(--space-1);
+    }
+    .receipt_total {
+      padding-top: var(--space-4);
+      border-top: 0.0625rem solid currentColor;
+      font-family: var(--mono-family);
+    }
+    .receipt_note {
+      padding-top: var(--space-4);
+      border-top: 0.0625rem solid currentColor;
+    }
+    .receipt_home {
+      justify-self: start;
+      min-height: 2.75rem;
+      display: inline-flex;
+      align-items: center;
+    }
+  }
+</style>

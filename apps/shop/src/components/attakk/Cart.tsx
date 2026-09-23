@@ -184,9 +184,15 @@ export default function Cart() {
             Try again
           </button>
         )}
-        <button class="cart_action" type="button" disabled>
-          Checkout coming soon
-        </button>
+        {quote ? (
+          <a class="cart_action" href="/checkout">
+            Checkout <span aria-hidden="true">→</span>
+          </a>
+        ) : (
+          <button class="cart_action" type="button" disabled>
+            Checkout
+          </button>
+        )}
         <p>
           Made on demand. Ready for pickup at ATTAKK HQ in roughly 6–10 weeks.
         </p>

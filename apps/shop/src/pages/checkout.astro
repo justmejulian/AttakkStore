@@ -1,0 +1,19 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Section from "@/components/Wrapper/Section.astro";
+import Heading from "@/components/Typography/Heading.astro";
+import ContentCheckout from "@/components/attakk/ContentCheckout.astro";
+
+Astro.response.headers.set("Cache-Control", "no-store");
+---
+
+<BaseLayout
+  title="Checkout"
+  description="Place your attakk order and receive a Swiss QR bill by email."
+  noindex
+>
+  <Section paddingTop="large" paddingBottom="large">
+    <Heading tag="h1" variant="h2">Checkout</Heading>
+    <ContentCheckout />
+  </Section>
+</BaseLayout>

@@ -1,0 +1,47 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Section from "@/components/Wrapper/Section.astro";
+import Paragraph from "@/components/Typography/Paragraph.astro";
+import OrderReceipt from "@/components/attakk/OrderReceipt.astro";
+import { getReceiptOrder } from "@/lib/orders.ts";
+import type { ReceiptOrder } from "@attakk/types";
+
+const { reference } = Astro.params;
+const token = Astro.url.searchParams.get("token");
+let order: ReceiptOrder | null = null;
+let unavailable = false;
+
+if (reference && token) {
+  try {
+    order = await getReceiptOrder(reference, token);
+  } catch (error) {
+    console.error(`receipt page: read failed for ${reference}`, error);
+    unavailable = true;
+  }
+}
+
+if (!order && !unavailable) return Astro.rewrite("/404");
+
+Astro.response.headers.set("Cache-Control", "private, no-store");
+---
+
+<BaseLayout
+  title={order ? `Order ${order.reference}` : "Order"}
+  description="Your attakk order confirmation."
+  noindex
+  ticker={false}
+>
+  <meta slot="head" name="referrer" content="no-referrer" />
+  <Section paddingTop="large" paddingBottom="large">
+    {
+      unavailable ? (
+        <Paragraph variant="large" class="color-faded">
+          We couldn’t load this order just now. Please try the link again in a
+          moment.
+        </Paragraph>
+      ) : (
+        order && <OrderReceipt order={order} />
+      )
+    }
+  </Section>
+</BaseLayout>

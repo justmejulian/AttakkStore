@@ -1,0 +1,131 @@
+---
+import Checkout from "./Checkout.tsx";
+
+interface Props {
+  /** Set to `false` to skip rendering this component and its children. */
+  render?: boolean;
+}
+
+const { render = true } = Astro.props;
+---
+
+{
+  render && (
+    <div class="checkout_wrap">
+      <Checkout client:only="preact">
+        <p slot="fallback">Loading checkout…</p>
+      </Checkout>
+      <noscript>
+        Enable JavaScript to check out with the cart saved in this browser.
+      </noscript>
+    </div>
+  )
+}
+
+<style is:global>
+  @layer components {
+    .checkout_wrap {
+      container-type: inline-size;
+      width: 100%;
+      margin-top: var(--space-7);
+    }
+    .checkout_layout {
+      display: grid;
+      align-items: start;
+      gap: var(--space-7);
+      @container (min-width: 64rem) {
+        grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+      }
+    }
+    .checkout_form,
+    .checkout_summary,
+    .checkout_empty {
+      display: grid;
+      gap: var(--space-5);
+    }
+    .checkout_summary {
+      padding: var(--space-5);
+      background: var(--background-2);
+      border: 0.125rem solid currentColor;
+    }
+    .checkout_label,
+    .checkout_fineprint,
+    .checkout_item small {
+      display: block;
+      font-family: var(--label-family);
+      font-size: 0.75rem;
+    }
+    .checkout_label {
+      margin-bottom: var(--space-2);
+      text-transform: uppercase;
+    }
+    .checkout_input {
+      width: 100%;
+      min-height: 3rem;
+      padding: var(--space-3);
+      border: 0.0625rem solid currentColor;
+      border-radius: 0;
+      background: var(--background);
+      color: inherit;
+      font: inherit;
+    }
+    .checkout_trap {
+      position: absolute;
+      width: 0.0625rem;
+      height: 0.0625rem;
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
+    .checkout_list {
+      display: grid;
+      gap: var(--space-3);
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+    .checkout_item,
+    .checkout_total {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--space-4);
+    }
+    .checkout_item small {
+      margin-top: var(--space-1);
+    }
+    .checkout_total {
+      padding-top: var(--space-4);
+      border-top: 0.0625rem solid currentColor;
+      font-family: var(--mono-family);
+    }
+    .checkout_action {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-4);
+      min-height: 3rem;
+      padding: var(--space-3) var(--space-4);
+      border: 0;
+      border-radius: 0;
+      background: var(--ink);
+      color: var(--paper);
+      font-family: var(--label-family);
+      text-transform: uppercase;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .checkout_action:disabled {
+      opacity: 0.45;
+      cursor: wait;
+    }
+    .checkout_back {
+      justify-self: start;
+      min-height: 2.75rem;
+      display: inline-flex;
+      align-items: center;
+    }
+    .checkout_error {
+      padding: var(--space-3);
+      border: 0.0625rem solid currentColor;
+    }
+  }
+</style>
