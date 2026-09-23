@@ -9,6 +9,8 @@ import type {
   OrderListRow,
   OrderStatus,
   OrderWithItems,
+  ReceiptOrder,
+  ReceiptOrderItem,
 } from "@attakk/types";
 import { db } from "../db.js";
 import { rfReference } from "../reference.js";
@@ -68,6 +70,17 @@ const orderByIdStmt = db.prepare(
 const itemsForOrderStmt = db.prepare(
   `SELECT id, product_id, size_id, qty, unit_price_rappen, title
      FROM order_items WHERE order_id = ? ORDER BY id`,
+);
+const receiptOrderStmt = db.prepare(
+  `SELECT id, reference, email, total_rappen, status, created_at, paid_at
+     FROM orders WHERE reference = ? AND token = ?`,
+);
+const receiptItemsStmt = db.prepare(
+  `SELECT oi.id, oi.product_id, oi.size_id, oi.qty,
+          oi.unit_price_rappen, oi.title, ps.label AS size_label
+     FROM order_items oi
+     LEFT JOIN product_sizes ps ON ps.id = oi.size_id
+    WHERE oi.order_id = ? ORDER BY oi.id`,
 );
 
 interface ProductRow {
@@ -161,6 +174,20 @@ export function getOrder(id: number): OrderWithItems | undefined {
   const order = orderByIdStmt.get(id) as Order | undefined;
   if (!order) return undefined;
   const items = itemsForOrderStmt.all(id) as OrderItem[];
+  return { ...order, items };
+}
+
+// The public receipt lookup requires both values in one query, so a wrong token
+// and an unknown reference are indistinguishable to a caller. The random token
+// is the capability that makes a receipt safe to revisit from its emailed URL.
+export function getReceiptOrder(
+  reference: string,
+  token: string,
+): ReceiptOrder | undefined {
+  const order = receiptOrderStmt.get(reference, token) as
+    ReceiptOrder | undefined;
+  if (!order) return undefined;
+  const items = receiptItemsStmt.all(order.id) as ReceiptOrderItem[];
   return { ...order, items };
 }
 

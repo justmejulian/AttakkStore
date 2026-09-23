@@ -8,6 +8,7 @@ import type {
   OrderListRow,
   OrderWithItems,
   ProductImage,
+  ReceiptOrder,
   ProductWithDrop,
   Settings,
 } from "@attakk/types";
@@ -233,6 +234,23 @@ export const createdOrder: OrderWithItems = {
       title: "Redline Jersey",
     },
   ],
+};
+
+// The same order read back from the receipt URL it was emailed as. The
+// customer-facing shape drops the fields that are none of their business — the
+// receipt token itself, the phone and the admin's note — and adds the current
+// size label to each line, so the page can print "M" without the shop holding a
+// size table. The reference and token are createdOrder's, so a consumer reads
+// it with exactly what POST /orders handed back.
+export const receiptOrder: ReceiptOrder = {
+  id: createdOrder.id,
+  reference: createdOrder.reference,
+  email: createdOrder.email,
+  total_rappen: createdOrder.total_rappen,
+  status: createdOrder.status,
+  created_at: createdOrder.created_at,
+  paid_at: createdOrder.paid_at,
+  items: [{ ...createdOrder.items[0], size_label: "M" }],
 };
 
 // The two checkout rejections worth having on hand, since they are the branches

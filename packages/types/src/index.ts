@@ -401,6 +401,17 @@ export interface OrderWithItems extends Order {
   items: OrderItem[];
 }
 
+// The customer-facing receipt enriches each stored line with the current size
+// label. Sizes referenced by an order cannot be deleted, so the join is stable;
+// price and title remain the historical snapshots stored on the order item.
+export interface ReceiptOrderItem extends OrderItem {
+  size_label: string | null;
+}
+
+export interface ReceiptOrder extends Omit<Order, "token" | "phone" | "note"> {
+  items: ReceiptOrderItem[];
+}
+
 // The order as the admin list shows it: every field but the receipt token. The
 // token guards the public receipt URL, so it is the shop's business (the order
 // creation response and the detail view carry it), never the list's — a list

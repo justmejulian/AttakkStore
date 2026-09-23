@@ -1,13 +1,26 @@
 import { cartInput, orderInput } from "@attakk/types";
 import { Hono } from "hono";
 import { sendOrderConfirmation } from "../email.js";
-import { OrderError, createOrder, quoteCart } from "../repositories/orders.js";
+import {
+  OrderError,
+  createOrder,
+  getReceiptOrder,
+  quoteCart,
+} from "../repositories/orders.js";
 
 // The one write the shop makes: it posts the cart here, the API prices it from
 // its own products table, creates the order with its RF reference, mails the
 // customer their QR bill, and returns the stored order so the shop can send
 // them to the receipt page. No SQL here — the repository owns it.
 export const orders = new Hono();
+
+orders.get("/orders/:reference", (c) => {
+  c.header("Cache-Control", "no-store");
+  const token = c.req.query("token");
+  if (!token) return c.json({ error: "not_found" }, 404);
+  const order = getReceiptOrder(c.req.param("reference"), token);
+  return order ? c.json(order) : c.json({ error: "not_found" }, 404);
+});
 
 orders.post("/cart/quote", async (c) => {
   c.header("Cache-Control", "no-store");

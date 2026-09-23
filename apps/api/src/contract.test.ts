@@ -16,6 +16,7 @@ import {
   liveDrops,
   orderRequest,
   originsDrop,
+  receiptOrder,
   redlineDrop,
   settings,
   unavailableProductRejection,
@@ -184,18 +185,47 @@ test("GET /products/:slug returns the product-with-drop fixture verbatim", async
   assert.deepEqual(await res.json(), jerseyProductDetail);
 });
 
-test("POST /orders returns the created-order fixture, bar the generated fields", async () => {
-  const res = await postOrder(orderRequest);
-  assert.equal(res.status, 201);
-  const body = (await res.json()) as typeof createdOrder;
+// The cart is posted once, here rather than inside a test, so it is the first
+// order in the database — id 1 and RF74000001, as the fixtures spell it — no
+// matter which of the two order tests runs first. One test asserts what came
+// back, the other reads that same order back from its receipt URL.
+const placedResponse = await postOrder(orderRequest);
+const placedOrder = (await placedResponse.json()) as typeof createdOrder;
+
+test("POST /orders returns the created-order fixture, bar the generated fields", () => {
+  assert.equal(placedResponse.status, 201);
 
   // token and created_at are generated per order and cannot be fixed; the rest
   // must match the fixture exactly, id 1 and RF74000001 included.
-  assert.match(body.token, /^[0-9a-f]{32}$/);
-  assert.match(body.created_at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/);
+  assert.match(placedOrder.token, /^[0-9a-f]{32}$/);
+  assert.match(
+    placedOrder.created_at,
+    /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/,
+  );
   assert.deepEqual(
-    { ...body, token: createdOrder.token, created_at: createdOrder.created_at },
+    {
+      ...placedOrder,
+      token: createdOrder.token,
+      created_at: createdOrder.created_at,
+    },
     createdOrder,
+  );
+});
+
+test("GET /orders/:reference returns the receipt fixture, bar created_at", async () => {
+  const res = await orders.request(
+    `/orders/${placedOrder.reference}?token=${placedOrder.token}`,
+  );
+  assert.equal(res.status, 200);
+
+  // The receipt the shop renders: no token, phone or note, and every line
+  // carrying its size label. created_at is the one generated field left in it.
+  assert.deepEqual(
+    {
+      ...((await res.json()) as typeof receiptOrder),
+      created_at: receiptOrder.created_at,
+    },
+    receiptOrder,
   );
 });
 

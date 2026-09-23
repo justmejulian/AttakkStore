@@ -28,6 +28,7 @@ import {
   createdOrder,
   liveDrops,
   orderListRows,
+  receiptOrder,
   redlineDrop,
   settings,
   uploadedImage,
@@ -455,6 +456,19 @@ export const handlers = [
     return order
       ? HttpResponse.json(order)
       : HttpResponse.json({ error: "not_found" }, { status: 404 });
+  }),
+
+  // Kept after the admin detail matcher: both paths end in /orders/:value, and
+  // MSW resolves wildcard handlers in declaration order.
+  http.get("*/orders/:reference", ({ params, request }) => {
+    const token = new URL(request.url).searchParams.get("token");
+    if (
+      params.reference === createdOrder.reference &&
+      token === createdOrder.token
+    ) {
+      return HttpResponse.json(receiptOrder);
+    }
+    return HttpResponse.json({ error: "not_found" }, { status: 404 });
   }),
 
   // Mark paid/cancelled/pending. Setting paid stamps paid_at, any other status

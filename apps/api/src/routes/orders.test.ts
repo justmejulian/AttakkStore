@@ -105,6 +105,49 @@ test("POST /orders creates the order and returns 201", async () => {
   assert.equal(body.total_rappen, 9500);
 });
 
+test("GET /orders/:reference requires the matching receipt token", async () => {
+  const size = db
+    .prepare(
+      "SELECT id, label FROM product_sizes WHERE product_id = 10 LIMIT 1",
+    )
+    .get() as { id: number; label: string };
+  const created = await post({
+    email: "buyer@example.com",
+    items: [
+      {
+        product_id: 10,
+        size_id: size.id,
+        qty: 1,
+      },
+    ],
+  });
+  const order = (await created.json()) as {
+    reference: string;
+    token: string;
+  };
+  const found = await orders.request(
+    `/orders/${order.reference}?token=${order.token}`,
+  );
+  assert.equal(found.status, 200);
+  assert.equal(found.headers.get("Cache-Control"), "no-store");
+  const receipt = (await found.json()) as {
+    items: { size_label: string }[];
+    token?: string;
+    note?: string;
+  };
+  assert.equal(receipt.items[0]?.size_label, size.label);
+  assert.equal(receipt.token, undefined);
+  assert.equal(receipt.note, undefined);
+  assert.equal(
+    (await orders.request(`/orders/${order.reference}?token=wrong`)).status,
+    404,
+  );
+  assert.equal(
+    (await orders.request(`/orders/${order.reference}`)).status,
+    404,
+  );
+});
+
 test("POST /orders rejects a malformed body with 400", async () => {
   assert.equal(
     (await post({ email: "buyer@example.com", items: [] })).status,

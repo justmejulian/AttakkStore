@@ -12,7 +12,8 @@ db.exec(`
   INSERT INTO products (id, drop_id, slug, name, price_rappen, status, sort)
   VALUES (14, 1, 'redline-sticker', 'Redline Sticker', 500, 'live', 2);
 `);
-const { OrderError, createOrder, getOrder } = await import("./orders.js");
+const { OrderError, createOrder, getOrder, getReceiptOrder } =
+  await import("./orders.js");
 
 after(() => cleanup());
 
@@ -53,6 +54,18 @@ test("stamps a valid RF reference and a receipt token", () => {
   assert.match(order.reference, /^RF\d{2}\d{6}$/);
   assert.match(order.token, /^[0-9a-f]{32}$/);
   assert.equal(order.status, "pending");
+});
+
+test("reads a receipt only with its reference and token", () => {
+  const order = createOrder({
+    email: "buyer@example.com",
+    items: [{ product_id: 10, size_id: jerseySizeM, qty: 1 }],
+  });
+  const receipt = getReceiptOrder(order.reference, order.token);
+  assert.equal(receipt?.email, "buyer@example.com");
+  assert.equal(receipt?.items[0]?.size_label, "M");
+  assert.equal(getReceiptOrder(order.reference, "wrong"), undefined);
+  assert.equal(getReceiptOrder("RF00000000", order.token), undefined);
 });
 
 test("sums a multi-line total across products", () => {

@@ -122,6 +122,23 @@ test("POST /orders returns the created order on a clean cart", async () => {
   assert.deepEqual(await res.json(), createdOrder);
 });
 
+test("GET /orders/:reference requires the receipt token", async () => {
+  const found = await fetch(
+    `${base}/orders/${createdOrder.reference}?token=${createdOrder.token}`,
+  );
+  assert.equal(found.status, 200);
+  assert.equal(
+    ((await found.json()) as { items: { size_label: string | null }[] })
+      .items[0]?.size_label,
+    "M",
+  );
+  assert.equal(
+    (await fetch(`${base}/orders/${createdOrder.reference}?token=wrong`))
+      .status,
+    404,
+  );
+});
+
 test("POST /orders mirrors the API's rejections, code for code", async () => {
   // Malformed (bad email) and duplicate variant are the schema's 400s.
   assert.equal((await post("/orders", { email: "x", items: [] })).status, 400);
