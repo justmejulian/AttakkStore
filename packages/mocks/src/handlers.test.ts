@@ -17,7 +17,6 @@ import {
   orderListRows,
   paidOrder,
   settings,
-  uploadedImage,
 } from "./fixtures.js";
 import { handlers } from "./handlers.js";
 import { resetMockState } from "./state.js";
@@ -118,13 +117,40 @@ test("GET /products/:slug serves the product-with-drop and 404s an unknown one",
   assert.equal((await fetch(`${base}/products/nope`)).status, 404);
 });
 
-test("POST /orders returns the created order on a clean cart", async () => {
+test("POST /orders prices a clean cart and stores what it created", async () => {
   const res = await post("/orders", {
     email: "buyer@example.com",
     items: [{ product_id: 10, size_id: 101, qty: 2 }],
   });
   assert.equal(res.status, 201);
-  assert.deepEqual(await res.json(), createdOrder);
+  const order = (await res.json()) as {
+    id: number;
+    reference: string;
+    token: string;
+    email: string;
+    total_rappen: number;
+    status: string;
+    items: { product_id: number; unit_price_rappen: number; title: string }[];
+  };
+  assert.equal(order.email, "buyer@example.com");
+  assert.equal(order.status, "pending");
+  // Repriced from the product row, never from what the browser sent.
+  assert.equal(order.total_rappen, 19000);
+  assert.equal(order.items[0].unit_price_rappen, 9500);
+  assert.equal(order.items[0].title, "Redline Jersey");
+
+  // It is the order the admin now opens, and the receipt the buyer was sent.
+  const detail = await fetch(`${base}/admin/orders/${order.id}`);
+  assert.equal(detail.status, 200);
+  const receipt = await fetch(
+    `${base}/orders/${order.reference}?token=${order.token}`,
+  );
+  assert.equal(receipt.status, 200);
+  assert.equal(
+    ((await receipt.json()) as { items: { size_label: string | null }[] })
+      .items[0].size_label,
+    "M",
+  );
 });
 
 test("GET /orders/:reference requires the receipt token", async () => {
@@ -470,20 +496,72 @@ test("DELETE /admin/products/:id refuses an ordered product and 404s a missing o
   assert.equal((await del("/admin/products/999")).status, 404);
 });
 
-test("image write routes return the stored row and an empty 204", async () => {
+test("an uploaded photo joins the product's gallery, and a deleted one leaves it", async () => {
+  const before = (await (await fetch(`${base}/admin/products/10`)).json()) as {
+    images: { id: number }[];
+  };
+
   const created = await fetch(`${base}/products/10/images`, { method: "POST" });
   assert.equal(created.status, 201);
-  assert.deepEqual(await created.json(), uploadedImage);
+  const image = (await created.json()) as { id: number; sort: number };
+  // The bytes are the stored fixture's — the processing is the API's — but the
+  // row is this product's own, at the end of its gallery.
+  assert.equal(image.sort, before.images.length);
 
-  const removed = await fetch(`${base}/images/5`, { method: "DELETE" });
+  const withPhoto = (await (
+    await fetch(`${base}/admin/products/10`)
+  ).json()) as { images: { id: number }[] };
+  assert.equal(withPhoto.images.length, before.images.length + 1);
+  assert.equal(withPhoto.images.at(-1)?.id, image.id);
+
+  const removed = await fetch(`${base}/images/${image.id}`, {
+    method: "DELETE",
+  });
   assert.equal(removed.status, 204);
   assert.equal(await removed.text(), "");
+
+  const after = (await (await fetch(`${base}/admin/products/10`)).json()) as {
+    images: { id: number }[];
+  };
+  assert.deepEqual(after.images, before.images);
+
+  // An image that is not there any more, and one that never was.
+  assert.equal(
+    (await fetch(`${base}/images/${image.id}`, { method: "DELETE" })).status,
+    404,
+  );
+  assert.equal(
+    (await fetch(`${base}/products/9999/images`, { method: "POST" })).status,
+    404,
+  );
 });
 
 test("admin users list, create and deactivate mirror the API", async () => {
   const list = await fetch(`${base}/admin/users`);
   assert.equal(list.status, 200);
   assert.deepEqual(await list.json(), adminUsers);
+
+  // Deactivate/restore: an unknown id 404s; admin is the only active user, so
+  // switching it off is the last_admin 409; the inactive editor restores fine; a
+  // bad body is a 400 — the API's codes. Checked before the create below, which
+  // adds a second active admin and so lifts the guard.
+  assert.equal(
+    (await patch("/admin/users/9999/active", { active: false })).status,
+    404,
+  );
+  const lastAdmin = await patch("/admin/users/1/active", { active: false });
+  assert.equal(lastAdmin.status, 409);
+  assert.equal(
+    ((await lastAdmin.json()) as { error: string }).error,
+    "last_admin",
+  );
+  const restore = await patch("/admin/users/2/active", { active: true });
+  assert.equal(restore.status, 200);
+  assert.equal(((await restore.json()) as { active: number }).active, 1);
+  assert.equal(
+    (await patch("/admin/users/2/active", { active: "nope" })).status,
+    400,
+  );
 
   // Create: a clean body is a 201, a taken username a 409, a short password a 400.
   const created = await post("/admin/users", {
@@ -505,25 +583,15 @@ test("admin users list, create and deactivate mirror the API", async () => {
     400,
   );
 
-  // Deactivate/restore: an unknown id 404s; admin is the only active user, so
-  // switching it off is the last_admin 409; the inactive editor restores fine; a
-  // bad body is a 400 — the API's codes.
+  // The created admin is in the list the screen re-reads, and now that there is
+  // a second active one, the last_admin guard lets the first go.
+  const listed = (await (await fetch(`${base}/admin/users`)).json()) as {
+    username: string;
+  }[];
+  assert.ok(listed.some((u) => u.username === "newbie"));
   assert.equal(
-    (await patch("/admin/users/9999/active", { active: false })).status,
-    404,
-  );
-  const lastAdmin = await patch("/admin/users/1/active", { active: false });
-  assert.equal(lastAdmin.status, 409);
-  assert.equal(
-    ((await lastAdmin.json()) as { error: string }).error,
-    "last_admin",
-  );
-  const restore = await patch("/admin/users/2/active", { active: true });
-  assert.equal(restore.status, 200);
-  assert.equal(((await restore.json()) as { active: number }).active, 1);
-  assert.equal(
-    (await patch("/admin/users/2/active", { active: "nope" })).status,
-    400,
+    (await patch("/admin/users/1/active", { active: false })).status,
+    200,
   );
 });
 
@@ -714,4 +782,47 @@ test("a deleted product is gone from every read", async () => {
   }[];
   assert.deepEqual(archived[0].products, []);
   assert.equal((await del("/admin/products/12")).status, 404);
+});
+
+test("a saved setting is what the next read returns", async () => {
+  const changed = { ...settings, notify_email: "orders@attakk.example" };
+  assert.equal((await put("/admin/settings", changed)).status, 200);
+
+  const read = (await (await fetch(`${base}/admin/settings`)).json()) as {
+    notify_email: string;
+  };
+  assert.equal(read.notify_email, "orders@attakk.example");
+});
+
+test("an order's status and note stay put, in the detail and in the list", async () => {
+  const paid = await patch(`/admin/orders/${createdOrder.id}/status`, {
+    status: "paid",
+  });
+  assert.equal(paid.status, 200);
+  await patch(`/admin/orders/${createdOrder.id}/note`, {
+    note: "Picked up at HQ.",
+  });
+
+  const detail = (await (
+    await fetch(`${base}/admin/orders/${createdOrder.id}`)
+  ).json()) as { status: string; paid_at: string | null; note: string };
+  assert.equal(detail.status, "paid");
+  assert.equal(detail.note, "Picked up at HQ.");
+  assert.ok(detail.paid_at, "marking it paid stamped a paid_at");
+
+  const row = (
+    (await (await fetch(`${base}/admin/orders`)).json()) as {
+      id: number;
+      status: string;
+    }[]
+  ).find((o) => o.id === createdOrder.id);
+  assert.equal(row?.status, "paid");
+  // The status filter reads the stored row too, not the fixture it was seeded from.
+  const pending = (await (
+    await fetch(`${base}/admin/orders?status=pending`)
+  ).json()) as { id: number }[];
+  assert.equal(
+    pending.some((o) => o.id === createdOrder.id),
+    false,
+  );
 });

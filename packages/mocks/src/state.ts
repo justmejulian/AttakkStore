@@ -4,11 +4,15 @@ import type {
   Drop,
   DropStatus,
   DropWithProducts,
+  OrderItem,
   OrderListRow,
+  OrderStatus,
   OrderWithItems,
+  ProductImage,
   ProductSize,
   ProductWithDrop,
   ProductWithSizes,
+  ReceiptOrder,
   Settings,
 } from "@attakk/types";
 import {
@@ -38,6 +42,7 @@ const FIRST_NEW_PRODUCT_ID = 900;
 const FIRST_NEW_SIZE_ID = 950;
 const FIRST_NEW_IMAGE_ID = 1100;
 const FIRST_NEW_ORDER_ID = 600;
+const FIRST_NEW_ORDER_ITEM_ID = 650;
 const FIRST_NEW_ADMIN_USER_ID = 700;
 
 // Timestamps the API takes from the clock. Fixed here so a mock response is the
@@ -57,6 +62,7 @@ interface MockState {
   nextSizeId: number;
   nextImageId: number;
   nextOrderId: number;
+  nextOrderItemId: number;
   nextAdminUserId: number;
 }
 
@@ -71,6 +77,7 @@ function seed(): MockState {
     nextSizeId: FIRST_NEW_SIZE_ID,
     nextImageId: FIRST_NEW_IMAGE_ID,
     nextOrderId: FIRST_NEW_ORDER_ID,
+    nextOrderItemId: FIRST_NEW_ORDER_ITEM_ID,
     nextAdminUserId: FIRST_NEW_ADMIN_USER_ID,
   };
 }
@@ -263,6 +270,35 @@ export function deleteProduct(id: number): boolean {
   return false;
 }
 
+// Attach a photo to a product. The processing and the content hash are the
+// API's; what the mock keeps is the row, at the end of the gallery, so the
+// upload shows up in the product's images the way a real one does.
+export function addProductImage(
+  productId: number,
+  image: Omit<ProductImage, "id" | "sort">,
+): ProductImage | undefined {
+  const product = productById(productId);
+  if (!product) return undefined;
+  const row: ProductImage = {
+    ...image,
+    id: state.nextImageId++,
+    sort: product.images.length,
+  };
+  product.images.push(row);
+  return row;
+}
+
+export function deleteProductImage(imageId: number): boolean {
+  for (const product of allProducts()) {
+    const i = product.images.findIndex((img) => img.id === imageId);
+    if (i !== -1) {
+      product.images.splice(i, 1);
+      return true;
+    }
+  }
+  return false;
+}
+
 // The purchasable products and each one's size ids: the pieces of a live drop,
 // which is what the API prices a cart line against. A drop archived through the
 // mock takes its products out of this, the way it does in the real API.
@@ -313,6 +349,95 @@ export function productHasOrders(productId: number): boolean {
   );
 }
 
+// Store an order the shop placed, priced off the current products the way the
+// API reprices every line from its own table. Newest first, which is the order
+// the admin's list is in. The reference and token are synthetic but shaped like
+// the real ones, so the receipt URL the checkout redirects to reads back.
+export function createOrder(input: {
+  email: string;
+  items: readonly { product_id: number; size_id: number | null; qty: number }[];
+}): OrderWithItems {
+  const id = state.nextOrderId++;
+  const items: OrderItem[] = input.items.map((line) => {
+    const product = productById(line.product_id)!;
+    return {
+      id: state.nextOrderItemId++,
+      product_id: line.product_id,
+      size_id: line.size_id,
+      qty: line.qty,
+      unit_price_rappen: product.price_rappen,
+      title: product.name,
+    };
+  });
+  const order: OrderWithItems = {
+    id,
+    reference: `RF74000${id}`,
+    token: String(id).padStart(32, "0"),
+    email: input.email,
+    phone: "",
+    total_rappen: items.reduce(
+      (sum, i) => sum + i.unit_price_rappen * i.qty,
+      0,
+    ),
+    status: "pending",
+    created_at: MOCK_CREATED_STAMP,
+    paid_at: null,
+    note: "",
+    items,
+  };
+  state.orders.unshift(order);
+  return order;
+}
+
+// Mark paid/cancelled/pending. Paid stamps paid_at if it had none, any other
+// status clears it — the API stamps the real time, the mock a fixed one.
+export function setOrderStatus(
+  id: number,
+  status: OrderStatus,
+): OrderWithItems | undefined {
+  const order = orderById(id);
+  if (!order) return undefined;
+  order.status = status;
+  order.paid_at = status === "paid" ? (order.paid_at ?? MOCK_PAID_STAMP) : null;
+  return order;
+}
+
+export function setOrderNote(
+  id: number,
+  note: string,
+): OrderWithItems | undefined {
+  const order = orderById(id);
+  if (!order) return undefined;
+  order.note = note;
+  return order;
+}
+
+// The customer-facing read, guarded by the token the checkout was handed. Drops
+// the fields that are none of the buyer's business and adds each line's current
+// size label, so the receipt can print "M" without the shop holding a size table.
+export function receiptFor(
+  reference: string,
+  token: string | null,
+): ReceiptOrder | undefined {
+  const order = state.orders.find(
+    (o) => o.reference === reference && o.token === token,
+  );
+  if (!order) return undefined;
+  const { token: _token, phone, note, items, ...row } = order;
+  void _token;
+  void phone;
+  void note;
+  return {
+    ...row,
+    items: items.map((item) => ({
+      ...item,
+      size_label:
+        productById(item.product_id)?.sizes.find((s) => s.id === item.size_id)
+          ?.label ?? null,
+    })),
+  };
+}
+
 /* ---------------------------------------------------------------- settings */
 
 export function currentSettings(): Settings {
@@ -340,4 +465,26 @@ export function adminUsernameTaken(username: string): boolean {
 
 export function activeAdminCount(): number {
   return state.adminUsers.filter((u) => u.active === 1).length;
+}
+
+export function createAdminUser(username: string): AdminUser {
+  const user: AdminUser = {
+    id: state.nextAdminUserId++,
+    username,
+    active: 1,
+    created_at: MOCK_CREATED_STAMP,
+    last_login_at: null,
+  };
+  state.adminUsers.push(user);
+  return user;
+}
+
+export function setAdminUserActive(
+  id: number,
+  active: boolean,
+): AdminUser | undefined {
+  const user = adminUserById(id);
+  if (!user) return undefined;
+  user.active = active ? 1 : 0;
+  return user;
 }

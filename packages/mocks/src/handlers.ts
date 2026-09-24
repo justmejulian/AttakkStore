@@ -16,16 +16,7 @@ import {
   settingsInput,
 } from "@attakk/types";
 import { http, HttpResponse } from "msw";
-import {
-  adminCredentials,
-  adminUser,
-  adminUsers,
-  allOrders,
-  createdOrder,
-  receiptOrder,
-  settings,
-  uploadedImage,
-} from "./fixtures.js";
+import { adminCredentials, adminUser, uploadedImage } from "./fixtures.js";
 import * as store from "./state.js";
 
 // The MSW handlers the shop and admin register through setupServer, so their
@@ -58,25 +49,9 @@ function lineRejection(line: {
   return null;
 }
 
-// Stored orders by id, for the admin's detail, status and note handlers.
-const ordersById = new Map(allOrders.map((o) => [o.id, o] as const));
-
 function isOrderStatus(value: string): boolean {
   return (ORDER_STATUSES as readonly string[]).includes(value);
 }
-
-// The paid_at the status handler stamps when a not-yet-paid order is marked paid.
-// The API stamps the real time; the mock is stateless, so it returns this fixed,
-// obviously-synthetic value instead — distinct from any fixture's own paid_at.
-const MOCK_PAID_STAMP = "2026-01-05T00:00:00.000Z";
-
-// The admin users by id (the deactivate/restore handler keys off this), the taken
-// usernames (a create with one is a 409), and how many are active — deactivating
-// the last active admin is refused, the same last_admin guard the API enforces.
-const adminUsersById = new Map(adminUsers.map((u) => [u.id, u] as const));
-const adminUsernames = new Set(adminUsers.map((u) => u.username));
-const activeAdminCount = adminUsers.filter((u) => u.active === 1).length;
-const MOCK_NEW_ADMIN_USER_ID = 700;
 
 export const handlers = [
   http.post("*/cart/quote", async ({ request }) => {
@@ -309,16 +284,33 @@ export const handlers = [
       const code = lineRejection(line);
       if (code) return HttpResponse.json({ error: code }, { status: 422 });
     }
-    return HttpResponse.json(createdOrder, { status: 201 });
+    return HttpResponse.json(store.createOrder(parsed.data), { status: 201 });
   }),
 
-  // The admin's image writes. The processing and content-hash bookkeeping are
-  // the API's; the mock just returns a stored row and an empty 204.
-  http.post("*/products/:id/images", () =>
-    HttpResponse.json(uploadedImage, { status: 201 }),
-  ),
+  // The admin's image writes. The processing and the content hash are the API's,
+  // so the mock reuses one stored row's bytes for whatever is uploaded; what it
+  // keeps is the row, at the end of the product's gallery. An unknown product or
+  // image is the same 404 the API gives.
+  http.post("*/products/:id/images", async ({ params, request }) => {
+    const body = await request.formData().catch(() => null);
+    const alt = body?.get("alt");
+    const { id: _id, sort: _sort, ...bytes } = uploadedImage;
+    void _id;
+    void _sort;
+    const image = store.addProductImage(Number(params.id), {
+      ...bytes,
+      alt: typeof alt === "string" ? alt : "",
+    });
+    return image
+      ? HttpResponse.json(image, { status: 201 })
+      : HttpResponse.json({ error: "not_found" }, { status: 404 });
+  }),
 
-  http.delete("*/images/:id", () => new HttpResponse(null, { status: 204 })),
+  http.delete("*/images/:id", ({ params }) =>
+    store.deleteProductImage(Number(params.id))
+      ? new HttpResponse(null, { status: 204 })
+      : HttpResponse.json({ error: "not_found" }, { status: 404 }),
+  ),
 
   // The admin's login. The real zod schema does the shape check, so a malformed
   // body is a 400 here for the same reason it is at the API; a matching username
@@ -354,7 +346,7 @@ export const handlers = [
   }),
 
   http.get("*/admin/orders/:id", ({ params }) => {
-    const order = ordersById.get(Number(params.id));
+    const order = store.orderById(Number(params.id));
     return order
       ? HttpResponse.json(order)
       : HttpResponse.json({ error: "not_found" }, { status: 404 });
@@ -364,21 +356,18 @@ export const handlers = [
   // MSW resolves wildcard handlers in declaration order.
   http.get("*/orders/:reference", ({ params, request }) => {
     const token = new URL(request.url).searchParams.get("token");
-    if (
-      params.reference === createdOrder.reference &&
-      token === createdOrder.token
-    ) {
-      return HttpResponse.json(receiptOrder);
-    }
-    return HttpResponse.json({ error: "not_found" }, { status: 404 });
+    const receipt = store.receiptFor(String(params.reference), token);
+    return receipt
+      ? HttpResponse.json(receipt)
+      : HttpResponse.json({ error: "not_found" }, { status: 404 });
   }),
 
   // Mark paid/cancelled/pending. Setting paid stamps paid_at, any other status
   // clears it — the API stamps the real time, the mock a fixed one, but the
   // shape and the paid/not-paid distinction match.
   http.patch("*/admin/orders/:id/status", async ({ params, request }) => {
-    const order = ordersById.get(Number(params.id));
-    if (!order)
+    const id = Number(params.id);
+    if (!store.orderById(id))
       return HttpResponse.json({ error: "not_found" }, { status: 404 });
     const parsed = orderStatusInput.safeParse(
       await request.json().catch(() => null),
@@ -386,15 +375,12 @@ export const handlers = [
     if (!parsed.success) {
       return HttpResponse.json({ error: "invalid" }, { status: 400 });
     }
-    const { status } = parsed.data;
-    const paid_at =
-      status === "paid" ? (order.paid_at ?? MOCK_PAID_STAMP) : null;
-    return HttpResponse.json({ ...order, status, paid_at });
+    return HttpResponse.json(store.setOrderStatus(id, parsed.data.status));
   }),
 
   http.patch("*/admin/orders/:id/note", async ({ params, request }) => {
-    const order = ordersById.get(Number(params.id));
-    if (!order)
+    const id = Number(params.id);
+    if (!store.orderById(id))
       return HttpResponse.json({ error: "not_found" }, { status: 404 });
     const parsed = orderNoteInput.safeParse(
       await request.json().catch(() => null),
@@ -402,13 +388,13 @@ export const handlers = [
     if (!parsed.success) {
       return HttpResponse.json({ error: "invalid" }, { status: 400 });
     }
-    return HttpResponse.json({ ...order, note: parsed.data.note });
+    return HttpResponse.json(store.setOrderNote(id, parsed.data.note));
   }),
 
   // Resend the QR bill. The send is the API's side effect; the mock just answers
   // the same 202-queued the moment the order is found.
   http.post("*/admin/orders/:id/resend", ({ params }) => {
-    const order = ordersById.get(Number(params.id));
+    const order = store.orderById(Number(params.id));
     if (!order)
       return HttpResponse.json({ error: "not_found" }, { status: 404 });
     return HttpResponse.json({ status: "queued" }, { status: 202 });
@@ -417,7 +403,9 @@ export const handlers = [
   // The Settings screen: read the whole object, or save it. The PUT validates
   // with the real settingsInput so a bad IBAN or email is a 400 exactly as the
   // API rejects it, and echoes the normalised result back like the API's re-read.
-  http.get("*/admin/settings", () => HttpResponse.json(settings)),
+  http.get("*/admin/settings", () =>
+    HttpResponse.json(store.currentSettings()),
+  ),
   http.put("*/admin/settings", async ({ request }) => {
     const parsed = settingsInput.safeParse(
       await request.json().catch(() => null),
@@ -428,7 +416,7 @@ export const handlers = [
         { status: 400 },
       );
     }
-    return HttpResponse.json(parsed.data);
+    return HttpResponse.json(store.saveSettings(parsed.data));
   }),
 
   // The Users screen: list admins, create one, deactivate or restore one. Create
@@ -437,7 +425,7 @@ export const handlers = [
   // the new row carries a synthetic id. Deactivate/restore keys off the fixtures
   // by id, 404s an unknown one, and refuses to switch off the last active admin
   // with the same last_admin 409 the API's guard returns.
-  http.get("*/admin/users", () => HttpResponse.json(adminUsers)),
+  http.get("*/admin/users", () => HttpResponse.json(store.adminUserList())),
 
   http.post("*/admin/users", async ({ request }) => {
     const parsed = adminUserCreateInput.safeParse(
@@ -449,23 +437,17 @@ export const handlers = [
         { status: 400 },
       );
     }
-    if (adminUsernames.has(parsed.data.username)) {
+    if (store.adminUsernameTaken(parsed.data.username)) {
       return HttpResponse.json({ error: "username_taken" }, { status: 409 });
     }
-    return HttpResponse.json(
-      {
-        id: MOCK_NEW_ADMIN_USER_ID,
-        username: parsed.data.username,
-        active: 1,
-        created_at: "2026-04-01T00:00:00.000Z",
-        last_login_at: null,
-      },
-      { status: 201 },
-    );
+    return HttpResponse.json(store.createAdminUser(parsed.data.username), {
+      status: 201,
+    });
   }),
 
   http.patch("*/admin/users/:id/active", async ({ params, request }) => {
-    const user = adminUsersById.get(Number(params.id));
+    const id = Number(params.id);
+    const user = store.adminUserById(id);
     if (!user)
       return HttpResponse.json({ error: "not_found" }, { status: 404 });
     const parsed = adminActiveInput.safeParse(
@@ -475,9 +457,9 @@ export const handlers = [
       return HttpResponse.json({ error: "invalid" }, { status: 400 });
     }
     const { active } = parsed.data;
-    if (!active && user.active === 1 && activeAdminCount <= 1) {
+    if (!active && user.active === 1 && store.activeAdminCount() <= 1) {
       return HttpResponse.json({ error: "last_admin" }, { status: 409 });
     }
-    return HttpResponse.json({ ...user, active: active ? 1 : 0 });
+    return HttpResponse.json(store.setAdminUserActive(id, active));
   }),
 ];
