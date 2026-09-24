@@ -1,0 +1,57 @@
+---
+/**
+ * ContentClubHero — the club page's masthead: the credential line, the name
+ * with its second word in the marker face, and the lede.
+ */
+import Eyebrow from "@/components/Typography/Eyebrow.astro";
+import Heading from "@/components/Typography/Heading.astro";
+import Paragraph from "@/components/Typography/Paragraph.astro";
+
+interface Props {
+  /** Set to `false` to skip rendering this component and its children. */
+  render?: boolean;
+}
+
+const { render = true } = Astro.props;
+---
+
+{
+  render && (
+    <div class="club-hero_wrap">
+      <Eyebrow class="margin-top-0">
+        Private gym <span class="color-faded">· Zürich, CH · Est. 2023</span>
+      </Eyebrow>
+
+      <Heading tag="h1" variant="display" class="margin-top-0">
+        The
+        <br />
+        <em class="club-hero_script">Club.</em>
+      </Heading>
+
+      <Paragraph variant="large" maxWidth={38} class="margin-top-0">
+        attakk is a private gym in Zürich. A small group of friends, training,
+        riding, making their own kit.
+      </Paragraph>
+    </div>
+  )
+}
+
+<style is:global>
+  @layer components {
+    /* Masthead */
+    .club-hero_wrap {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-5);
+    }
+
+    .club-hero_script {
+      display: inline-block;
+      font-family: var(--marker-family);
+      font-style: normal;
+      font-weight: 400;
+      color: var(--heading-accent);
+      transform: rotate(-2deg);
+    }
+  }
+</style>

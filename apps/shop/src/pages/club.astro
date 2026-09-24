@@ -1,0 +1,32 @@
+---
+/**
+ * /club — the window into the gym behind the label: a masthead, a wall of
+ * photographs from the basement and the road, and the partners who back it.
+ * No sessions, no prices, no join form — attakk is friends and family, and the
+ * page says so rather than selling a membership. Nothing is read from the API,
+ * so the page can't fail with it.
+ */
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Section from "@/components/Wrapper/Section.astro";
+import ContentClubHero from "@/components/attakk/ContentClubHero.astro";
+import ContentClubWall from "@/components/attakk/ContentClubWall.astro";
+import ContentClubPartners from "@/components/attakk/ContentClubPartners.astro";
+---
+
+<BaseLayout
+  title="The Club"
+  description="attakk is a private gym in Zürich. A small group of friends, training, riding, making their own kit."
+  theme="light"
+>
+  <Section theme="dark" paddingTop="large" paddingBottom="large">
+    <ContentClubHero />
+  </Section>
+
+  <Section paddingTop="small">
+    <ContentClubWall />
+  </Section>
+
+  <Section theme="dark" paddingBottom="large">
+    <ContentClubPartners />
+  </Section>
+</BaseLayout>

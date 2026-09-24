@@ -1,0 +1,229 @@
+---
+/**
+ * ContentClubWall — the wall of photographs from the basement and the road.
+ * Each tile names where it sits on the twelve-column layout, so a photo can be
+ * swapped for another of the same shape without touching the CSS; below the
+ * breakpoint the placement is dropped and the tiles fall into two columns,
+ * keeping each photo's own orientation rather than cropping it to a strip.
+ */
+import Eyebrow from "@/components/Typography/Eyebrow.astro";
+import Img from "@/components/Media/Img.astro";
+
+import gymDumbbells from "@/assets/club/gym-dumbbells.jpg";
+import gymBench from "@/assets/club/gym-bench.jpg";
+import gymDeadlift from "@/assets/club/gym-deadlift.jpg";
+import gymRack from "@/assets/club/gym-rack.jpg";
+import rideDusk from "@/assets/club/ride-dusk.jpg";
+import rideRoad from "@/assets/club/ride-road.jpg";
+import rideTrack from "@/assets/club/ride-track.jpg";
+import kitJersey from "@/assets/club/kit-jersey.jpg";
+
+interface Props {
+  /** Set to `false` to skip rendering this component and its children. */
+  render?: boolean;
+}
+
+const { render = true } = Astro.props;
+
+const INSTAGRAM_HANDLE = "@attakk_studios";
+const INSTAGRAM_URL = "https://instagram.com/attakk_studios";
+
+const tiles = [
+  {
+    src: gymDumbbells,
+    alt: "A lunge with dumbbells racked on the shoulders in the basement gym.",
+    shape: "portrait",
+    col: 1,
+    row: 1,
+    cols: 4,
+    rows: 6,
+  },
+  {
+    src: gymBench,
+    alt: "A bench press under a loaded bar, spotted from the end of the bench.",
+    shape: "landscape",
+    col: 5,
+    row: 1,
+    cols: 5,
+    rows: 3,
+  },
+  {
+    src: gymDeadlift,
+    alt: "A deadlift held at the top of the lift, the bar bent under the plates.",
+    shape: "landscape",
+    col: 5,
+    row: 4,
+    cols: 5,
+    rows: 3,
+  },
+  {
+    src: rideDusk,
+    alt: "Two riders in attakk kit stopped above the city lights at dusk.",
+    shape: "portrait",
+    col: 10,
+    row: 1,
+    cols: 3,
+    rows: 6,
+  },
+  {
+    src: rideRoad,
+    alt: "A rider in the yellow attakk jersey on the road out of town.",
+    shape: "portrait",
+    col: 1,
+    row: 7,
+    cols: 3,
+    rows: 6,
+  },
+  {
+    src: gymRack,
+    alt: "Training around the squat racks and rings on a weekday morning.",
+    shape: "landscape",
+    col: 4,
+    row: 7,
+    cols: 6,
+    rows: 3,
+  },
+  {
+    src: rideTrack,
+    alt: "A bunch riding the boards of the floodlit track at night.",
+    shape: "landscape",
+    col: 4,
+    row: 10,
+    cols: 6,
+    rows: 3,
+  },
+  {
+    src: kitJersey,
+    alt: "The back of the attakk racing jersey, shot on the road.",
+    shape: "portrait",
+    col: 10,
+    row: 7,
+    cols: 3,
+    rows: 6,
+  },
+] as const;
+---
+
+{
+  render && (
+    <div class="club-wall_wrap">
+      <div class="club-wall_head">
+        <Eyebrow tag="h2" class="margin-top-0">
+          N° 01 · Inside
+        </Eyebrow>
+        <span class="club-wall_handle label color-faded">
+          {INSTAGRAM_HANDLE}
+        </span>
+      </div>
+
+      <div class="club-wall_layout">
+        {tiles.map((tile) => (
+          <figure
+            class:list={["club-wall_tile", tile.shape]}
+            style={`--_col:${tile.col};--_row:${tile.row};--_cols:${tile.cols};--_rows:${tile.rows}`}
+          >
+            <Img
+              class="club-wall_photo"
+              src={tile.src}
+              alt={tile.alt}
+              variant="constrained"
+              sizes="(max-width: 64rem) 50vw, 45vw"
+            />
+          </figure>
+        ))}
+      </div>
+
+      <div class="club-wall_foot label color-faded">
+        <span>↳ More from the basement</span>
+        <a
+          class="club-wall_link"
+          href={INSTAGRAM_URL}
+          target="_blank"
+          rel="noreferrer"
+        >
+          {INSTAGRAM_HANDLE} →
+        </a>
+      </div>
+    </div>
+  )
+}
+
+<style is:global>
+  @layer components {
+    /* Wall */
+    .club-wall_wrap {
+      container-type: inline-size;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-5);
+    }
+
+    .club-wall_head,
+    .club-wall_foot {
+      display: flex;
+      flex-flow: row wrap;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: var(--space-3);
+    }
+
+    .club-wall_head {
+      padding-bottom: var(--space-4);
+      border-bottom: var(--border-width) solid var(--text);
+    }
+
+    .club-wall_foot {
+      align-items: center;
+      padding-top: var(--space-4);
+      border-top: var(--border-width) solid
+        color-mix(in srgb, var(--text) 18%, transparent);
+    }
+
+    .club-wall_link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 2.75rem;
+      color: var(--heading-accent);
+      text-decoration: none;
+    }
+
+    /* A contact sheet pinned up: hard edges, a hairline gap, two columns until
+       there is room for the full placement. */
+    .club-wall_layout {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-2);
+
+      @container (width >= 64rem) {
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        grid-auto-rows: clamp(3.5rem, 6.5cqw, 6.5rem);
+      }
+    }
+
+    .club-wall_tile {
+      --_ratio: 3 / 4;
+      margin: 0;
+      overflow: hidden;
+      aspect-ratio: var(--_ratio);
+      background-color: var(--dark-800);
+
+      &.landscape {
+        --_ratio: 4 / 3;
+      }
+
+      @container (width >= 64rem) {
+        grid-column: var(--_col) / span var(--_cols);
+        grid-row: var(--_row) / span var(--_rows);
+        aspect-ratio: auto;
+      }
+    }
+
+    .club-wall_photo {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+  }
+</style>

@@ -1,0 +1,173 @@
+---
+/**
+ * ContentClubPartners — the businesses backing the gym, each a number, a role
+ * and a handle to follow. Three columns divided by hairlines where there is
+ * room, stacked where there isn't.
+ */
+import Eyebrow from "@/components/Typography/Eyebrow.astro";
+import Heading from "@/components/Typography/Heading.astro";
+import Paragraph from "@/components/Typography/Paragraph.astro";
+
+interface Props {
+  /** Set to `false` to skip rendering this component and its children. */
+  render?: boolean;
+}
+
+const { render = true } = Astro.props;
+
+const partners = [
+  {
+    no: "01",
+    role: "Official Recovery Partner",
+    name: "KAEX Switzerland",
+    handle: "@kaex_switzerland",
+    url: "https://instagram.com/kaex_switzerland",
+    blurb: "Recovery support after the heaviest sessions.",
+  },
+  {
+    no: "02",
+    role: "Official Recycling Partner",
+    name: "Mr. Green",
+    handle: "@mr_green.ch",
+    url: "https://instagram.com/mr_green.ch",
+    blurb: "Keeping the basement clean and the planet cleaner.",
+  },
+  {
+    no: "03",
+    role: "Official Hydration Partner",
+    name: "PeaQ Hydration",
+    handle: "@peaqhydration",
+    url: "https://instagram.com/peaqhydration",
+    blurb: "Fueling every interval, every set.",
+  },
+] as const;
+---
+
+{
+  render && (
+    <div class="club-partners_wrap">
+      <div class="club-partners_head">
+        <div>
+          <Eyebrow class="margin-top-0">N° 02 · Partners</Eyebrow>
+          <Heading tag="h2" class="margin-top-3">
+            The people
+            <br />
+            behind the basement.
+          </Heading>
+        </div>
+        <Paragraph variant="large" maxWidth={32} class="margin-top-0">
+          Three partners we trust. They keep us moving, hydrated, and in
+          business. Worth a follow.
+        </Paragraph>
+      </div>
+
+      <div class="club-partners_list">
+        {partners.map((partner) => (
+          <div class="club-partners_item">
+            <span class="club-partners_no">{partner.no}</span>
+            <Paragraph class="club-partners_role label color-faded">
+              {partner.role}
+            </Paragraph>
+            <Heading tag="h3" variant="h4" class="margin-top-0">
+              {partner.name}
+            </Heading>
+            <a
+              class="club-partners_handle label"
+              href={partner.url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {partner.handle}
+            </a>
+            <Paragraph variant="small" class="margin-top-0 color-faded">
+              {partner.blurb}
+            </Paragraph>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+<style is:global>
+  @layer components {
+    /* Partners */
+    .club-partners_wrap {
+      container-type: inline-size;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-7);
+    }
+
+    .club-partners_head {
+      display: grid;
+      align-items: end;
+      gap: var(--space-5) var(--space-6);
+
+      @container (width >= 64rem) {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    .club-partners_list {
+      display: grid;
+      border-top: var(--border-width) solid
+        color-mix(in srgb, var(--text) 25%, transparent);
+
+      @container (width >= 64rem) {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    .club-partners_item {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      padding-block: var(--space-5);
+      border-block-end: var(--border-width) solid
+        color-mix(in srgb, var(--text) 15%, transparent);
+
+      &:last-child {
+        border-block-end: 0;
+      }
+
+      @container (width >= 64rem) {
+        padding-inline-end: var(--space-5);
+        border-block-end: 0;
+        border-inline-end: var(--border-width) solid
+          color-mix(in srgb, var(--text) 15%, transparent);
+
+        & + & {
+          padding-inline-start: var(--space-5);
+        }
+
+        &:last-child {
+          padding-inline-end: 0;
+          border-inline-end: 0;
+        }
+      }
+    }
+
+    .club-partners_no {
+      font-family: var(--display-family);
+      font-weight: var(--primary-bold);
+      font-size: clamp(2.5rem, 2rem + 2vw, 3.5rem);
+      line-height: 0.8;
+      color: var(--heading-accent);
+    }
+
+    .club-partners_role {
+      margin-top: 0;
+    }
+
+    .club-partners_handle {
+      display: inline-flex;
+      align-items: center;
+      align-self: flex-start;
+      min-height: 2.75rem;
+      color: var(--heading-accent);
+      text-decoration: none;
+    }
+  }
+</style>
