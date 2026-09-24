@@ -11,7 +11,7 @@ import {
   paidOrder,
   settings,
 } from "@attakk/mocks";
-import { server } from "@attakk/mocks/node";
+import { resetMockState, server } from "@attakk/mocks/node";
 import { http, HttpResponse } from "msw";
 import { app } from "./app.js";
 
@@ -21,7 +21,12 @@ import { app } from "./app.js";
 // is "error" so a stray request the mock does not model fails loudly.
 before(() => server.listen({ onUnhandledRequest: "error" }));
 // Some tests override /admin/login for a single case; reset so it never leaks.
-afterEach(() => server.resetHandlers());
+// The mock keeps what these screens write, so its store is reset too — a test
+// that creates or deletes a row must not be the next one's starting point.
+afterEach(() => {
+  server.resetHandlers();
+  resetMockState();
+});
 after(() => server.close());
 
 // The `admin_session` cookie out of a Set-Cookie header, ready to send back.

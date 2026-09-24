@@ -18,21 +18,15 @@ import {
 import { http, HttpResponse } from "msw";
 import {
   adminCredentials,
-  adminDrops,
-  adminProducts,
   adminUser,
   adminUsers,
-  allDrops,
   allOrders,
-  archivedDrops,
   createdOrder,
-  liveDrops,
-  orderListRows,
   receiptOrder,
-  redlineDrop,
   settings,
   uploadedImage,
 } from "./fixtures.js";
+import * as store from "./state.js";
 
 // The MSW handlers the shop and admin register through setupServer, so their
 // code calls fetch exactly as in production and is answered by the fixtures
@@ -45,23 +39,15 @@ import {
 // fixtures, so what the shop sees in development is what the API's contract test
 // proves the real routes return.
 
-// The purchasable products and each one's size ids, taken from the live drop —
-// an archived drop's pieces are deliberately absent. The order handler prices a
-// line against this the way the API's priceLine does, so the mock returns the
-// same 422 the API would for an unsellable product or a wrong/missing size.
-const purchasable = new Map(
-  redlineDrop.products.map(
-    (p) => [p.id, new Set(p.sizes.map((s) => s.id))] as const,
-  ),
-);
-
 // Mirror of the API's per-line pricing check: the OrderError code a line would
-// raise, or null when it is sellable. Kept in step with apps/api priceLine.
+// raise, or null when it is sellable. Kept in step with apps/api priceLine, and
+// read off the store, so a drop archived or a size removed through the admin
+// changes what the shop is allowed to buy.
 function lineRejection(line: {
   product_id: number;
   size_id: number | null;
 }): string | null {
-  const sizes = purchasable.get(line.product_id);
+  const sizes = store.purchasableSizes().get(line.product_id);
   if (!sizes) return "product_unavailable";
   if (sizes.size > 0) {
     if (line.size_id === null) return "size_required";
@@ -72,82 +58,8 @@ function lineRejection(line: {
   return null;
 }
 
-// One drop, by slug — live or archived, mirroring the API's live-or-archived
-// read. Anything else is the 404 the shop routes to its not-found page. Both maps
-// key off allDrops so "every drop" is spelled once; adding a fixture drop reaches
-// the slug reads without touching this.
-const dropsBySlug = new Map(allDrops.map((d) => [d.slug, d] as const));
-
-// Every drop by id, for the admin's edit-form read. The bare rows (adminDrops)
-// are already the products-stripped Drop shape the detail returns.
-const dropsById = new Map(adminDrops.map((d) => [d.id, d] as const));
-
-// The slugs already in use, the one thing the drop create/edit handlers check —
-// mirroring the API's slug-unique guard. The mock is stateless, so this is the
-// seeded fixtures.
-const dropSlugs = new Set(adminDrops.map((d) => d.slug));
-
-// The id a created drop comes back with. The API assigns the next rowid; the mock
-// is stateless, so it returns this fixed, obviously-synthetic id, distinct from
-// any seeded drop's (and from the product and size synthetics below).
-const MOCK_NEW_DROP_ID = 800;
-
-// The storefront's single-product read, by slug: each product with the bare drop
-// it belongs to attached, mirroring the API's getProductBySlug. The bare drop
-// comes from dropsById (the adminDrops projection) so the handler and the
-// jerseyProductDetail fixture source it from one definition. Built from allDrops
-// so a fixture product reaches this read without touching the handler.
-const productDetailBySlug = new Map(
-  allDrops.flatMap((d) =>
-    d.products.map(
-      (p) => [p.slug, { ...p, drop: dropsById.get(d.id)! }] as const,
-    ),
-  ),
-);
-
-// Stored orders by id, for the admin's detail, status and note handlers. The
-// list is the same rows without their items (orderListRows).
+// Stored orders by id, for the admin's detail, status and note handlers.
 const ordersById = new Map(allOrders.map((o) => [o.id, o] as const));
-
-// Every product by id — the full ProductWithSizes, for the admin's edit-form
-// read. The list (adminProducts) is the flat, drop-annotated projection.
-const productsById = new Map(
-  allDrops.flatMap((d) => d.products).map((p) => [p.id, p] as const),
-);
-
-// The drops a product can be created into, and the slugs already in use — the
-// two things the create/edit handlers check, mirroring the API's drop-exists and
-// slug-unique guards. The mock is stateless, so these are the seeded fixtures.
-const dropIds = new Set(allDrops.map((d) => d.id));
-const productSlugs = new Set(
-  allDrops.flatMap((d) => d.products).map((p) => p.slug),
-);
-
-// The id a created product comes back with. The API assigns the next rowid; the
-// mock is stateless, so it returns this fixed, obviously-synthetic id instead,
-// distinct from any seeded product's.
-const MOCK_NEW_PRODUCT_ID = 900;
-
-// The base id newly-inserted sizes come back with, for the same stateless reason.
-const MOCK_NEW_SIZE_ID = 950;
-
-// The (product, size) pairs an order line references, so the size reconcile can
-// refuse to drop a size still in use — mirroring the API, which counts a size in
-// use regardless of the order's status (a cancelled order still records it).
-const sizesInUse = new Set(
-  allOrders.flatMap((o) =>
-    o.items.flatMap((i) =>
-      i.size_id === null ? [] : [`${i.product_id}:${i.size_id}`],
-    ),
-  ),
-);
-
-// The products at least one order references, so the delete handler can refuse
-// them (409 has_orders) the way the API does — an order line pins the product,
-// which must be hidden rather than deleted.
-const productsWithOrders = new Set(
-  allOrders.flatMap((o) => o.items.map((i) => i.product_id)),
-);
 
 function isOrderStatus(value: string): boolean {
   return (ORDER_STATUSES as readonly string[]).includes(value);
@@ -177,7 +89,7 @@ export const handlers = [
       if (error) return HttpResponse.json({ error }, { status: 422 });
     }
     const items = parsed.data.items.map((line) => {
-      const product = productsById.get(line.product_id)!;
+      const product = store.productById(line.product_id)!;
       return {
         ...line,
         title: product.name,
@@ -196,7 +108,7 @@ export const handlers = [
   // Registered before */drops for the same MSW *-wildcard reason as admin
   // products: without it, /admin/drops would match */drops and return the live
   // collections. The real API distinguishes the literal prefixes.
-  http.get("*/admin/drops", () => HttpResponse.json(adminDrops)),
+  http.get("*/admin/drops", () => HttpResponse.json(store.dropRows())),
 
   // Create a drop. The real zod does the shape check, so a bad body is a 400; then
   // a slug already in use is a 409, the same codes the API gives. On success a
@@ -206,20 +118,17 @@ export const handlers = [
     if (!parsed.success) {
       return HttpResponse.json({ error: "invalid" }, { status: 400 });
     }
-    if (dropSlugs.has(parsed.data.slug)) {
+    if (store.dropSlugTaken(parsed.data.slug)) {
       return HttpResponse.json({ error: "slug_taken" }, { status: 409 });
     }
-    return HttpResponse.json(
-      { id: MOCK_NEW_DROP_ID, ...parsed.data },
-      { status: 201 },
-    );
+    return HttpResponse.json(store.createDrop(parsed.data), { status: 201 });
   }),
 
   // The admin's drop detail, keyed off the fixtures by id. Registered before
   // */drops/:slug for the same *-wildcard reason as the list: without it,
   // /admin/drops/1 would match */drops/:slug (slug "1") and 404.
   http.get("*/admin/drops/:id", ({ params }) => {
-    const drop = dropsById.get(Number(params.id));
+    const drop = store.dropRowById(Number(params.id));
     return drop
       ? HttpResponse.json(drop)
       : HttpResponse.json({ error: "not_found" }, { status: 404 });
@@ -228,29 +137,26 @@ export const handlers = [
   // Edit a drop. A missing drop is a 404, a bad body a 400, a slug taken by a
   // DIFFERENT drop a 409 — re-saving a drop with its own slug is fine.
   http.patch("*/admin/drops/:id", async ({ params, request }) => {
-    const drop = dropsById.get(Number(params.id));
-    if (!drop) {
+    const id = Number(params.id);
+    if (!store.dropExists(id)) {
       return HttpResponse.json({ error: "not_found" }, { status: 404 });
     }
     const parsed = dropInput.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
       return HttpResponse.json({ error: "invalid" }, { status: 400 });
     }
-    const clash = [...dropsById.values()].some(
-      (d) => d.id !== drop.id && d.slug === parsed.data.slug,
-    );
-    if (clash) {
+    if (store.dropSlugTaken(parsed.data.slug, id)) {
       return HttpResponse.json({ error: "slug_taken" }, { status: 409 });
     }
-    return HttpResponse.json({ ...drop, ...parsed.data });
+    return HttpResponse.json(store.updateDrop(id, parsed.data));
   }),
 
   // The archive control: flip a drop's status. A missing drop is a 404, a bad
   // status a 400; on success the drop comes back with the new status, the same as
   // the API. Registered with the other admin/drops writes, before */drops/:slug.
   http.patch("*/admin/drops/:id/status", async ({ params, request }) => {
-    const drop = dropsById.get(Number(params.id));
-    if (!drop) {
+    const id = Number(params.id);
+    if (!store.dropExists(id)) {
       return HttpResponse.json({ error: "not_found" }, { status: 404 });
     }
     const parsed = dropStatusInput.safeParse(
@@ -259,15 +165,17 @@ export const handlers = [
     if (!parsed.success) {
       return HttpResponse.json({ error: "invalid" }, { status: 400 });
     }
-    return HttpResponse.json({ ...drop, status: parsed.data.status });
+    return HttpResponse.json(store.setDropStatus(id, parsed.data.status));
   }),
 
-  http.get("*/drops", () => HttpResponse.json(liveDrops)),
+  http.get("*/drops", () => HttpResponse.json(store.dropsByStatus("live"))),
 
-  http.get("*/archive", () => HttpResponse.json(archivedDrops)),
+  http.get("*/archive", () =>
+    HttpResponse.json(store.dropsByStatus("archived")),
+  ),
 
   http.get("*/drops/:slug", ({ params }) => {
-    const drop = dropsBySlug.get(String(params.slug));
+    const drop = store.dropBySlug(String(params.slug));
     return drop
       ? HttpResponse.json(drop)
       : HttpResponse.json({ error: "not_found" }, { status: 404 });
@@ -280,7 +188,9 @@ export const handlers = [
   // literal `/admin/products` and `/products` prefixes distinctly. The list is
   // every product grouped by drop with its ordered-units tally; the detail is the
   // full product with its sizes and images, keyed off the fixtures by id.
-  http.get("*/admin/products", () => HttpResponse.json(adminProducts)),
+  http.get("*/admin/products", () =>
+    HttpResponse.json(store.adminProductRows()),
+  ),
 
   // Create a product. The real zod does the shape check, so a bad body is a 400;
   // then a drop that does not exist is a 422 and a slug already in use a 409, the
@@ -293,20 +203,17 @@ export const handlers = [
     if (!parsed.success) {
       return HttpResponse.json({ error: "invalid" }, { status: 400 });
     }
-    if (!dropIds.has(parsed.data.drop_id)) {
+    if (!store.dropExists(parsed.data.drop_id)) {
       return HttpResponse.json({ error: "drop_not_found" }, { status: 422 });
     }
-    if (productSlugs.has(parsed.data.slug)) {
+    if (store.productSlugTaken(parsed.data.slug)) {
       return HttpResponse.json({ error: "slug_taken" }, { status: 409 });
     }
-    return HttpResponse.json(
-      { id: MOCK_NEW_PRODUCT_ID, ...parsed.data, sizes: [], images: [] },
-      { status: 201 },
-    );
+    return HttpResponse.json(store.createProduct(parsed.data), { status: 201 });
   }),
 
   http.get("*/admin/products/:id", ({ params }) => {
-    const product = productsById.get(Number(params.id));
+    const product = store.productById(Number(params.id));
     return product
       ? HttpResponse.json(product)
       : HttpResponse.json({ error: "not_found" }, { status: 404 });
@@ -315,8 +222,8 @@ export const handlers = [
   // Edit a product. A missing product is a 404, a bad body a 400, a slug taken by
   // a DIFFERENT product a 409 — re-saving a product with its own slug is fine.
   http.patch("*/admin/products/:id", async ({ params, request }) => {
-    const product = productsById.get(Number(params.id));
-    if (!product) {
+    const id = Number(params.id);
+    if (!store.productById(id)) {
       return HttpResponse.json({ error: "not_found" }, { status: 404 });
     }
     const parsed = productInput.safeParse(
@@ -325,13 +232,10 @@ export const handlers = [
     if (!parsed.success) {
       return HttpResponse.json({ error: "invalid" }, { status: 400 });
     }
-    const clash = [...productsById.values()].some(
-      (p) => p.id !== product.id && p.slug === parsed.data.slug,
-    );
-    if (clash) {
+    if (store.productSlugTaken(parsed.data.slug, id)) {
       return HttpResponse.json({ error: "slug_taken" }, { status: 409 });
     }
-    return HttpResponse.json({ ...product, ...parsed.data });
+    return HttpResponse.json(store.updateProduct(id, parsed.data));
   }),
 
   // Replace a product's sizes. Missing product 404, bad body 400; a desired size
@@ -339,7 +243,7 @@ export const handlers = [
   // order references is a 409 size_in_use — the API's reconcile guards. On success
   // the product comes back with the reconciled sizes (new ones get synthetic ids).
   http.put("*/admin/products/:id/sizes", async ({ params, request }) => {
-    const product = productsById.get(Number(params.id));
+    const product = store.productById(Number(params.id));
     if (!product) {
       return HttpResponse.json({ error: "not_found" }, { status: 404 });
     }
@@ -358,36 +262,34 @@ export const handlers = [
     const keptIds = new Set(
       parsed.data.sizes.flatMap((s) => (s.id === undefined ? [] : [s.id])),
     );
+    const inUse = store.sizesInUse();
     const removedInUse = product.sizes.some(
-      (s) => !keptIds.has(s.id) && sizesInUse.has(`${product.id}:${s.id}`),
+      (s) => !keptIds.has(s.id) && inUse.has(`${product.id}:${s.id}`),
     );
     if (removedInUse) {
       return HttpResponse.json({ error: "size_in_use" }, { status: 409 });
     }
-    let nextId = MOCK_NEW_SIZE_ID;
-    const sizes = parsed.data.sizes.map((s) => ({
-      id: s.id ?? nextId++,
-      label: s.label,
-      sort: s.sort,
-    }));
-    return HttpResponse.json({ ...product, sizes });
+    return HttpResponse.json(
+      store.setProductSizes(product.id, parsed.data.sizes),
+    );
   }),
 
   // Delete a product. Missing is a 404; a product an order references is a 409
   // has_orders (hide it instead), the same refusal the API gives. Otherwise 204.
   http.delete("*/admin/products/:id", ({ params }) => {
-    const product = productsById.get(Number(params.id));
-    if (!product) {
+    const id = Number(params.id);
+    if (!store.productById(id)) {
       return HttpResponse.json({ error: "not_found" }, { status: 404 });
     }
-    if (productsWithOrders.has(product.id)) {
+    if (store.productHasOrders(id)) {
       return HttpResponse.json({ error: "has_orders" }, { status: 409 });
     }
+    store.deleteProduct(id);
     return new HttpResponse(null, { status: 204 });
   }),
 
   http.get("*/products/:slug", ({ params }) => {
-    const product = productDetailBySlug.get(String(params.slug));
+    const product = store.productWithDropBySlug(String(params.slug));
     return product
       ? HttpResponse.json(product)
       : HttpResponse.json({ error: "not_found" }, { status: 404 });
@@ -445,10 +347,10 @@ export const handlers = [
     if (status !== null && !isOrderStatus(status)) {
       return HttpResponse.json({ error: "invalid_status" }, { status: 400 });
     }
-    const rows = status
-      ? orderListRows.filter((o) => o.status === status)
-      : orderListRows;
-    return HttpResponse.json(rows);
+    const rows = store.orderListRows();
+    return HttpResponse.json(
+      status ? rows.filter((o) => o.status === status) : rows,
+    );
   }),
 
   http.get("*/admin/orders/:id", ({ params }) => {

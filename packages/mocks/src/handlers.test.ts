@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, before, test } from "node:test";
+import { after, before, beforeEach, test } from "node:test";
 import { setupServer } from "msw/node";
 import {
   adminCredentials,
@@ -20,6 +20,7 @@ import {
   uploadedImage,
 } from "./fixtures.js";
 import { handlers } from "./handlers.js";
+import { resetMockState } from "./state.js";
 
 // The mock's own side of the contract: that the handlers actually intercept
 // (the `*` wildcard patterns bind to whatever host a consumer points at) and
@@ -35,6 +36,10 @@ const base = "http://api.internal:3000";
 
 before(() => server.listen({ onUnhandledRequest: "error" }));
 after(() => server.close());
+
+// The handlers keep what they are written, so each test starts from the seeded
+// fixtures rather than from whatever the one before it created or deleted.
+beforeEach(() => resetMockState());
 
 function post(path: string, body: unknown): Promise<Response> {
   return fetch(`${base}${path}`, {
@@ -536,4 +541,177 @@ test("settings read returns the fixture and a bad IBAN is a 400", async () => {
     creditor_account: "CH5604835012345678000",
   });
   assert.equal(bad.status, 400);
+});
+
+// What the canned-response mock could not do: a write the next read agrees
+// with. These are the flows a screen built against the mock used to appear to
+// complete while the list beside it said otherwise.
+
+test("a created drop is in the next list read, and its slug is then taken", async () => {
+  const created = await post("/admin/drops", dropBody("nightfall"));
+  const { id } = (await created.json()) as { id: number };
+
+  const listed = (await (await fetch(`${base}/admin/drops`)).json()) as {
+    id: number;
+    slug: string;
+  }[];
+  assert.ok(
+    listed.some((d) => d.id === id && d.slug === "nightfall"),
+    "the drop the create returned is in the list",
+  );
+
+  const detail = await fetch(`${base}/admin/drops/${id}`);
+  assert.equal(detail.status, 200);
+  assert.equal(((await detail.json()) as { slug: string }).slug, "nightfall");
+
+  // The seeded fixtures were the only slugs the stateless mock could refuse.
+  const again = await post("/admin/drops", dropBody("nightfall"));
+  assert.equal(again.status, 409);
+  assert.deepEqual(await again.json(), { error: "slug_taken" });
+});
+
+test("a renamed drop reads back renamed, and frees the slug it had", async () => {
+  const renamed = await patch("/admin/drops/1", dropBody("redline-two"));
+  assert.equal(renamed.status, 200);
+
+  const detail = await fetch(`${base}/admin/drops/1`);
+  assert.equal(((await detail.json()) as { slug: string }).slug, "redline-two");
+
+  // "redline" is nobody's slug now, so a create may take it.
+  assert.equal((await post("/admin/drops", dropBody("redline"))).status, 201);
+});
+
+test("archiving a drop moves it between the storefront's two reads", async () => {
+  const live = (await (await fetch(`${base}/drops`)).json()) as {
+    id: number;
+  }[];
+  assert.deepEqual(
+    live.map((d) => d.id),
+    [1],
+  );
+
+  const flipped = await patch("/admin/drops/1/status", { status: "archived" });
+  assert.equal(flipped.status, 200);
+
+  assert.deepEqual(await (await fetch(`${base}/drops`)).json(), []);
+  const archived = (await (await fetch(`${base}/archive`)).json()) as {
+    id: number;
+  }[];
+  assert.deepEqual(archived.map((d) => d.id).sort(), [1, 2]);
+
+  // Its pieces are no longer sellable, the way the API prices against live drops.
+  const quote = await post("/cart/quote", { items: orderRequest.items });
+  assert.equal(quote.status, 422);
+  assert.deepEqual(await quote.json(), { error: "product_unavailable" });
+});
+
+test("a created product joins its drop, the admin list and the storefront read", async () => {
+  const created = await post("/admin/products", {
+    drop_id: 1,
+    slug: "nightfall-cap",
+    name: "Nightfall Cap",
+    price_rappen: 4500,
+    min_orders: 1,
+    status: "live",
+  });
+  assert.equal(created.status, 201);
+  const { id } = (await created.json()) as { id: number };
+
+  const rows = (await (await fetch(`${base}/admin/products`)).json()) as {
+    id: number;
+    drop_name: string;
+    ordered_count: number;
+  }[];
+  const row = rows.find((p) => p.id === id);
+  assert.equal(
+    row?.drop_name,
+    "Redline",
+    "it is listed under the drop it went into",
+  );
+  assert.equal(row?.ordered_count, 0, "nothing has been ordered of it yet");
+
+  const page = await fetch(`${base}/products/nightfall-cap`);
+  assert.equal(page.status, 200);
+  const product = (await page.json()) as { drop: { slug: string } };
+  assert.equal(product.drop.slug, "redline");
+});
+
+test("an edited product reads back edited everywhere it is shown", async () => {
+  const edited = await patch("/admin/products/10", {
+    slug: "redline-jersey",
+    name: "Redline Jersey II",
+    price_rappen: 10500,
+    min_orders: 1,
+    status: "live",
+  });
+  assert.equal(edited.status, 200);
+
+  const detail = (await (await fetch(`${base}/admin/products/10`)).json()) as {
+    name: string;
+    price_rappen: number;
+  };
+  assert.equal(detail.name, "Redline Jersey II");
+
+  // The price the shop quotes comes off the same row.
+  const quote = (await (
+    await post("/cart/quote", {
+      items: [{ product_id: 10, size_id: 101, qty: 1 }],
+    })
+  ).json()) as { total_rappen: number };
+  assert.equal(quote.total_rappen, 10500);
+});
+
+test("saved sizes replace the old ones and keep the ids of the rows that stay", async () => {
+  // Sizes 100 and 101 are on order lines, so they have to stay; 102 is free to
+  // drop, and XL is new.
+  const saved = await put("/admin/products/10/sizes", {
+    sizes: [
+      { id: 100, label: "S", sort: 0 },
+      { id: 101, label: "M", sort: 1 },
+      { label: "XL", sort: 2 },
+    ],
+  });
+  assert.equal(saved.status, 200);
+
+  const detail = (await (await fetch(`${base}/admin/products/10`)).json()) as {
+    sizes: { id: number; label: string }[];
+  };
+  assert.deepEqual(
+    detail.sizes.map((s) => s.label),
+    ["S", "M", "XL"],
+  );
+  assert.deepEqual(
+    detail.sizes.slice(0, 2).map((s) => s.id),
+    [100, 101],
+    "the kept rows keep the ids the order lines point at",
+  );
+
+  // The size that was dropped is no longer one the shop can buy.
+  const gone = await post("/cart/quote", {
+    items: [{ product_id: 10, size_id: 102, qty: 1 }],
+  });
+  assert.equal(gone.status, 422);
+  assert.deepEqual(await gone.json(), { error: "size_invalid" });
+});
+
+test("a deleted product is gone from every read", async () => {
+  // Products 10 and 11 are on order lines and refused; 12 is the one free to go.
+  assert.equal((await del("/admin/products/10")).status, 409);
+  assert.equal((await del("/admin/products/12")).status, 204);
+
+  assert.equal((await fetch(`${base}/admin/products/12`)).status, 404);
+  assert.equal((await fetch(`${base}/products/origins-tee`)).status, 404);
+  const rows = (await (await fetch(`${base}/admin/products`)).json()) as {
+    id: number;
+  }[];
+  assert.equal(
+    rows.some((p) => p.id === 12),
+    false,
+  );
+  // Its drop keeps it no longer either.
+  const archived = (await (await fetch(`${base}/archive`)).json()) as {
+    products: unknown[];
+  }[];
+  assert.deepEqual(archived[0].products, []);
+  assert.equal((await del("/admin/products/12")).status, 404);
 });

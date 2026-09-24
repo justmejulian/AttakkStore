@@ -1,6 +1,8 @@
 import { setupServer } from "msw/node";
 import { handlers } from "./handlers.js";
 
+export { resetMockState } from "./state.js";
+
 // The msw/node side of the package, kept out of the main entry so importing
 // handlers or fixtures never drags in setupServer. An app enables the mock by
 // loading ./register as a preload (see the dev:mock scripts); this is what that
