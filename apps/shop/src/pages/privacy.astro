@@ -1,0 +1,58 @@
+---
+/**
+ * /privacy — what the shop actually collects, grounded in the real order
+ * flow (email only at checkout, no shipping address, no analytics, cart kept
+ * in the browser's localStorage) rather than generic boilerplate. Still a
+ * draft per the plan doc; have someone read it before launch.
+ */
+import LegalLayout from "@/layouts/LegalLayout.astro";
+---
+
+<LegalLayout
+  title="Privacy policy"
+  description="What atk-collective.ch collects when you place an order, and why."
+  heading="Privacy policy"
+  updated="September 2026"
+>
+  <h2>Who this is</h2>
+  <p>
+    ATTAKK, Musterstrasse 1, 8000 Zürich, Switzerland (hello@atk-collective.ch)
+    is responsible for the personal data described here, under the Swiss Federal
+    Act on Data Protection.
+  </p>
+
+  <h2>What we collect</h2>
+  <p>
+    Browsing the shop and building a cart collects nothing — the cart lives only
+    in your browser's local storage until you check out. Placing an order sends
+    us your email address and the items and sizes you ordered — nothing else. We
+    don't ask for a phone number or a shipping address, and we never see your
+    card details, since payment is a bank transfer against a QR-bill rather than
+    a card or a payment processor.
+  </p>
+
+  <h2>Why we use it</h2>
+  <p>
+    To confirm and fulfil your order, to email you the QR bill and pickup
+    details, and to keep the accounting records Swiss law requires. We don't use
+    your data for marketing. The one third party that sees it is our email
+    provider (Infomaniak), which relays your confirmation and QR bill to your
+    inbox; otherwise we don't share it with anyone outside ATTAKK.
+  </p>
+
+  <h2>Cookies and analytics</h2>
+  <p>This site does not use tracking cookies or any third-party analytics.</p>
+
+  <h2>Where it's stored</h2>
+  <p>
+    Order data is stored on our own server, not a third-party platform, and kept
+    only as long as accounting and warranty obligations require.
+  </p>
+
+  <h2>Your rights</h2>
+  <p>
+    You can ask us what we hold about you, ask us to correct it, or ask us to
+    delete it once it's no longer needed for an order or for accounting, by
+    writing to hello@atk-collective.ch.
+  </p>
+</LegalLayout>

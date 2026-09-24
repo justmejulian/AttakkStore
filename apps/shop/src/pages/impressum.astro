@@ -1,0 +1,57 @@
+---
+/**
+ * /impressum — the legal notice a Swiss online provider must publish (UWG
+ * art. 3 lit. s). Every bracketed value is a placeholder inherited from the
+ * same defaults as the QR-bill creditor (see apps/api/src/creditor.ts) or
+ * marked [like this] where no placeholder exists yet — swap them for the
+ * real details, and have someone read the page, before launch.
+ */
+import LegalLayout from "@/layouts/LegalLayout.astro";
+---
+
+<LegalLayout
+  title="Impressum"
+  description="Legal notice for atk-collective.ch: who operates this site and how to reach us."
+  heading="Impressum"
+  updated="September 2026"
+>
+  <h2>Provider</h2>
+  <p>
+    ATTAKK<br />
+    Musterstrasse 1<br />
+    8000 Zürich<br />
+    Switzerland
+  </p>
+  <p>
+    Email: hello@atk-collective.ch<br />
+    Phone: [add a phone number, or remove this line]<br />
+    Legal form: [sole proprietorship / association — whichever applies]<br />
+    UID / VAT number: [CHE-xxx.xxx.xxx, if registered]
+  </p>
+
+  <h2>Responsible for content</h2>
+  <p>
+    The provider named above is responsible for the content of this website
+    within the meaning of the Swiss Federal Act against Unfair Competition.
+  </p>
+
+  <h2>Liability for content</h2>
+  <p>
+    The content of this website has been compiled with care, but ATTAKK gives no
+    assurance as to its accuracy, completeness or currency. Use of any content
+    is at the visitor's own risk.
+  </p>
+
+  <h2>Liability for links</h2>
+  <p>
+    This website may link to third-party sites. ATTAKK has no influence over
+    those sites' content and accepts no responsibility for it; the linked site's
+    own operator is responsible.
+  </p>
+
+  <h2>Copyright</h2>
+  <p>
+    The photographs, text and design on this website belong to ATTAKK unless
+    otherwise noted, and may not be reproduced without prior written consent.
+  </p>
+</LegalLayout>
