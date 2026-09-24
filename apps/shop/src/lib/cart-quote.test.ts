@@ -1,71 +1,155 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { APIContext } from "astro";
-import { POST } from "../pages/api/cart/quote.js";
+import type { CartQuote } from "@attakk/types";
+import type { CartLine } from "./cart.js";
+import {
+  fetchQuote,
+  messageFor,
+  pricedLine,
+  quoteBody,
+  quoteItems,
+} from "./cart-quote.js";
 
-const items = [{ product_id: 10, size_id: 101, qty: 2 }];
+const copy = {
+  product_unavailable: "A piece in your cart is no longer available.",
+  unavailable: "We couldn’t check your total.",
+};
 
-function quote(body: string) {
-  return POST({
-    request: new Request("http://shop.test/api/cart/quote", {
-      method: "POST",
+const line: CartLine = {
+  product_id: 10,
+  size_id: 101,
+  qty: 2,
+  slug: "jersey",
+  title: "Jersey",
+  unit_price_rappen: 9500,
+  size_label: "M",
+};
+
+const quote: CartQuote = {
+  items: [
+    {
+      product_id: 10,
+      size_id: 101,
+      qty: 2,
+      unit_price_rappen: 9500,
+      title: "Jersey",
+      line_total_rappen: 19000,
+    },
+  ],
+  total_rappen: 19000,
+};
+
+function respond(status: number, body: unknown): typeof fetch {
+  return async () =>
+    new Response(JSON.stringify(body), {
+      status,
       headers: { "Content-Type": "application/json" },
-      body,
-    }),
-  } as APIContext);
+    });
 }
 
-test("cart quote proxy rejects invalid input without calling the API", async (t) => {
-  const upstream = t.mock.method(globalThis, "fetch", () => {
-    throw new Error("Unexpected API request");
-  });
-  for (const body of ["{", JSON.stringify({ items: [] })]) {
-    const response = await quote(body);
-    assert.equal(response.status, 400);
-    assert.equal(response.headers.get("Cache-Control"), "no-store");
-    assert.deepEqual(await response.json(), { error: "invalid" });
-  }
-  assert.equal(upstream.mock.callCount(), 0);
+test("the projection carries identities and counts, never prices or titles", () => {
+  assert.deepEqual(quoteItems([line]), [
+    { product_id: 10, size_id: 101, qty: 2 },
+  ]);
+  assert.equal(
+    quoteBody([line]),
+    '{"items":[{"product_id":10,"size_id":101,"qty":2}]}',
+  );
+  // Two carts that differ only in what is rendered ask the same question.
+  assert.equal(quoteBody([line]), quoteBody([{ ...line, title: "Renamed" }]));
+  assert.notEqual(quoteBody([line]), quoteBody([{ ...line, qty: 3 }]));
 });
 
-test("cart quote proxy forwards only validated selections and preserves API results", async (t) => {
-  for (const [status, body] of [
-    [200, { items: [], total_rappen: 19000 }],
-    [400, { error: "invalid" }],
-    [422, { error: "product_unavailable" }],
-  ] as const) {
-    const respond: typeof fetch = async (url, init) => {
-      assert.equal(
-        new URL(url instanceof Request ? url.url : url).pathname,
-        "/cart/quote",
-      );
-      assert.equal(init?.method, "POST");
-      assert.deepEqual(JSON.parse(init?.body as string), { items });
-      return Response.json(body, { status });
-    };
-    const upstream = t.mock.method(globalThis, "fetch", respond);
-    const response = await quote(
-      JSON.stringify({ items: [{ ...items[0], unit_price_rappen: 1 }] }),
-    );
-    assert.equal(response.status, status);
-    assert.equal(response.headers.get("Cache-Control"), "no-store");
-    assert.deepEqual(await response.json(), body);
-    assert.equal(upstream.mock.callCount(), 1);
-    upstream.mock.restore();
-  }
+test("only copy the surface wrote is ever shown", () => {
+  assert.equal(
+    messageFor(new Error(copy.product_unavailable), copy),
+    copy.product_unavailable,
+  );
+  assert.equal(
+    messageFor(new Error("Failed to fetch"), copy),
+    copy.unavailable,
+  );
+  assert.equal(messageFor(new TypeError("bad json"), copy), copy.unavailable);
+  assert.equal(messageFor("not an error at all", copy), copy.unavailable);
 });
 
-test("cart quote proxy returns a retryable error for upstream failures", async (t) => {
-  for (const fail of [
-    () => Promise.reject(new Error("Connection refused")),
-    () => Promise.resolve(new Response("Internal error", { status: 500 })),
-    () => Promise.resolve(new Response("not JSON", { status: 200 })),
+test("a quote is returned as it came back", async (t) => {
+  t.mock.method(globalThis, "fetch", respond(200, quote));
+  const result = await fetchQuote(
+    quoteBody([line]),
+    copy,
+    new AbortController().signal,
+  );
+  assert.deepEqual(result, { quote });
+});
+
+test("the request posts the projected cart as JSON", async (t) => {
+  const seen: { url?: string; init?: RequestInit } = {};
+  const send: typeof fetch = async (url, init) => {
+    seen.url = String(url);
+    seen.init = init;
+    return new Response(JSON.stringify(quote), { status: 200 });
+  };
+  t.mock.method(globalThis, "fetch", send);
+  await fetchQuote(quoteBody([line]), copy, new AbortController().signal);
+  assert.equal(seen.url, "/api/cart/quote");
+  assert.equal(seen.init?.method, "POST");
+  assert.equal(seen.init?.body, quoteBody([line]));
+});
+
+test("a refused cart becomes the sentence written for its code", async (t) => {
+  t.mock.method(
+    globalThis,
+    "fetch",
+    respond(422, { error: "product_unavailable" }),
+  );
+  const result = await fetchQuote(
+    quoteBody([line]),
+    copy,
+    new AbortController().signal,
+  );
+  assert.deepEqual(result, { error: copy.product_unavailable });
+});
+
+test("an unknown code, an unreachable proxy and an unreadable body all fall back", async (t) => {
+  const unreadable: typeof fetch = async () =>
+    new Response("not json", { status: 200 });
+  const refuse: typeof fetch = async () => {
+    throw new Error("Failed to fetch");
+  };
+  for (const responder of [
+    respond(503, { error: "brand_new_code" }),
+    respond(500, {}),
+    unreadable,
+    refuse,
   ]) {
-    const upstream = t.mock.method(globalThis, "fetch", fail);
-    const response = await quote(JSON.stringify({ items }));
-    assert.equal(response.status, 503);
-    assert.equal(response.headers.get("Cache-Control"), "no-store");
-    assert.deepEqual(await response.json(), { error: "unavailable" });
-    upstream.mock.restore();
+    const mocked = t.mock.method(globalThis, "fetch", responder);
+    const result = await fetchQuote(
+      quoteBody([line]),
+      copy,
+      new AbortController().signal,
+    );
+    assert.deepEqual(result, { error: copy.unavailable });
+    mocked.mock.restore();
   }
+});
+
+test("an aborted request has no answer to render", async (t) => {
+  const controller = new AbortController();
+  const slow: typeof fetch = async () => {
+    controller.abort();
+    return new Response(JSON.stringify(quote), { status: 200 });
+  };
+  t.mock.method(globalThis, "fetch", slow);
+  assert.equal(
+    await fetchQuote(quoteBody([line]), copy, controller.signal),
+    null,
+  );
+});
+
+test("a line is priced by its variant, not its position", () => {
+  assert.equal(pricedLine(quote, line), quote.items[0]);
+  assert.equal(pricedLine(quote, { ...line, size_id: 102 }), undefined);
+  assert.equal(pricedLine(quote, { ...line, product_id: 11 }), undefined);
+  assert.equal(pricedLine(undefined, line), undefined);
 });

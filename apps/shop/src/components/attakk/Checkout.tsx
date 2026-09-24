@@ -1,9 +1,18 @@
 import { useStore } from "@nanostores/preact";
-import { useEffect, useState } from "preact/hooks";
-import type { CartQuote, OrderWithItems } from "@attakk/types";
+import { useState } from "preact/hooks";
+import type { OrderWithItems } from "@attakk/types";
 import { cart, clearCart } from "@/lib/cart.ts";
+import {
+  messageFor,
+  pricedLine,
+  quoteItems,
+  useCartQuote,
+} from "@/lib/cart-quote.ts";
 import { formatFrancs } from "@/lib/format.ts";
 
+// The wording this screen is willing to show — the quote's failures said to
+// someone mid-payment, plus rate_limited, which only the order endpoint can
+// answer with. The cart writes its own, gentler, set for the same codes.
 const messages: Record<string, string> = {
   invalid: "Check your email and cart, then try again.",
   product_unavailable:
@@ -20,57 +29,17 @@ const messages: Record<string, string> = {
     "We couldn’t place your order. Your cart is saved. Please try again.",
 };
 
-// Only copy written above is ever shown. A fetch rejection carries a browser
-// string ("Failed to fetch"), and a body that would not parse carries a
-// TypeError, neither of which belongs in front of someone mid-payment — the
-// same guard Cart.tsx puts on its quote errors.
-function shown(reason: unknown): string {
-  return reason instanceof Error &&
-    Object.values(messages).includes(reason.message)
-    ? reason.message
-    : messages.unavailable;
-}
-
-function orderLines(lines: ReturnType<typeof cart.get>) {
-  return lines.map(({ product_id, size_id, qty }) => ({
-    product_id,
-    size_id,
-    qty,
-  }));
-}
-
 export default function Checkout() {
   const lines = useStore(cart);
-  const [quote, setQuote] = useState<CartQuote | null>(null);
-  const [quoteError, setQuoteError] = useState("");
+  const {
+    quote,
+    error: quoteError,
+    pending,
+    retry,
+  } = useCartQuote(lines, messages);
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const key = JSON.stringify({ items: orderLines(lines) });
-
-  useEffect(() => {
-    setQuote(null);
-    setQuoteError("");
-    if (lines.length === 0) return;
-    const controller = new AbortController();
-    void fetch("/api/cart/quote", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: key,
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        const body = await response.json();
-        if (!response.ok) {
-          throw new Error(messages[body.error] ?? messages.unavailable);
-        }
-        if (!controller.signal.aborted) setQuote(body as CartQuote);
-      })
-      .catch((reason) => {
-        if (!controller.signal.aborted) setQuoteError(shown(reason));
-      });
-    return () => controller.abort();
-  }, [key, lines.length]);
 
   async function submit(event: SubmitEvent) {
     event.preventDefault();
@@ -87,7 +56,7 @@ export default function Checkout() {
         body: JSON.stringify({
           email,
           website: data.get("website"),
-          items: orderLines(lines),
+          items: quoteItems(lines),
         }),
       });
       const body = response.status === 204 ? null : await response.json();
@@ -100,7 +69,7 @@ export default function Checkout() {
         `/order/${encodeURIComponent(order.reference)}?token=${encodeURIComponent(order.token)}`,
       );
     } catch (reason) {
-      setError(shown(reason));
+      setError(messageFor(reason, messages));
       setSubmitting(false);
     }
   }
@@ -171,11 +140,7 @@ export default function Checkout() {
         <h2 class="text-style-h3">Your order</h2>
         <ul class="checkout_list">
           {lines.map((line) => {
-            const priced = quote?.items.find(
-              (item) =>
-                item.product_id === line.product_id &&
-                item.size_id === line.size_id,
-            );
+            const priced = pricedLine(quote, line);
             return (
               <li
                 class="checkout_item"
@@ -197,13 +162,25 @@ export default function Checkout() {
         <div class="checkout_total" aria-live="polite">
           <span>Total</span>
           <span>
-            {quote ? `CHF ${formatFrancs(quote.total_rappen)}` : "Checking…"}
+            {quote
+              ? `CHF ${formatFrancs(quote.total_rappen)}`
+              : pending
+                ? "Checking…"
+                : "—"}
           </span>
         </div>
+        {/* Without the retry the order cannot be placed at all: the submit
+            button stays disabled until there is a quote, and nothing else on
+            this screen asks for one again. */}
         {quoteError && (
-          <p class="checkout_error" role="alert">
-            {quoteError}
-          </p>
+          <>
+            <p class="checkout_error" role="alert">
+              {quoteError}
+            </p>
+            <button class="checkout_retry" type="button" onClick={retry}>
+              Try again
+            </button>
+          </>
         )}
         <a class="checkout_back" href="/cart">
           ← Edit cart
