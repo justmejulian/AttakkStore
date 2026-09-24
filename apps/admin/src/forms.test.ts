@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { productInput, productSizesInput, settingsInput } from "@attakk/types";
 import {
-  conflictErrors,
+  conflictOutcome,
   DROP_FIELDS,
   dropInputFromForm,
   fieldErrors,
@@ -15,6 +15,11 @@ import {
   settingsInputFromForm,
   sizesFromForm,
 } from "./forms.js";
+
+const fallback = {
+  status: 400,
+  message: "The change was refused (brand_new_code).",
+} as const;
 
 // The helpers a write screen leans on, reachable on their own now that they are
 // not buried in the route module. The routes themselves are covered end to end
@@ -90,14 +95,20 @@ test("submitted values are echoed back as typed, valid or not", () => {
   assert.deepEqual(Object.keys(values).sort(), [...PRODUCT_FIELDS].sort());
 });
 
-test("a taken slug reads as itself, an unexpected code still reads", () => {
-  assert.deepEqual(conflictErrors("slug_taken"), {
-    slug: "That slug is already in use.",
+test("a refusal carries the status it is answered with, wherever it is raised", () => {
+  // The same code means the same thing and the same status on every screen —
+  // the decision each write site used to take for itself.
+  assert.deepEqual(conflictOutcome("slug_taken", fallback), {
+    status: 409,
+    message: "That slug is already in use.",
   });
-  assert.equal(
-    conflictErrors("brand_new_code").slug,
-    "The change was refused (brand_new_code).",
-  );
+  assert.equal(conflictOutcome("too_large", fallback).status, 413);
+  assert.equal(conflictOutcome("unknown_size", fallback).status, 422);
+  assert.equal(conflictOutcome("last_admin", fallback).status, 409);
+});
+
+test("a code the admin has never seen is said in the screen's own words", () => {
+  assert.deepEqual(conflictOutcome("brand_new_code", fallback), fallback);
 });
 
 test("the drop form's numbers are parsed and its colours passed through", () => {

@@ -27,14 +27,14 @@ import {
   ADMIN_USER_FIELDS,
   blankDropValues,
   blankProductValues,
-  conflictErrors,
+  type ConflictStatus,
+  conflictOutcome,
   DROP_FIELDS,
   dropFormValues,
   dropInputFromForm,
   dropValues,
   fieldErrors,
   formStr,
-  imageErrorMessage,
   PRODUCT_FIELDS,
   productCreateInputFromForm,
   productFormValues,
@@ -45,7 +45,6 @@ import {
   settingsInputFromForm,
   settingsValues,
   sizeStateFromProduct,
-  sizesConflictMessage,
   sizesFromForm,
 } from "./forms.js";
 import { type AdminEnv, requireAuth } from "./auth.js";
@@ -402,7 +401,7 @@ app.post("/products", async (c) => {
   const rerender = async (
     errors: Partial<Record<keyof ProductFormValues, string>>,
     dropError: string | undefined,
-    status: 400 | 409 | 422,
+    status: ConflictStatus,
   ): Promise<Response> => {
     const d = await loadDrops(c);
     if ("errorPage" in d) return d.errorPage;
@@ -428,14 +427,15 @@ app.post("/products", async (c) => {
   const w = await apiWrite(c, "/admin/products", jsonBody("POST", parsed.data));
   if ("errorPage" in w) return w.errorPage;
   if ("conflict" in w) {
-    if (w.conflict === "drop_not_found") {
-      return rerender({}, "That drop no longer exists.", 422);
-    }
-    return rerender(
-      conflictErrors(w.conflict),
-      undefined,
-      w.conflict === "slug_taken" ? 409 : 400,
-    );
+    const { status, message } = conflictOutcome(w.conflict, {
+      status: 400,
+      message: `The change was refused (${w.conflict}).`,
+    });
+    // The drop is a field of this form, but not one of PRODUCT_FIELDS — the
+    // picker shows its own error above them.
+    return w.conflict === "drop_not_found"
+      ? rerender({}, message, status)
+      : rerender({ slug: message }, undefined, status);
   }
   const created = (await w.res.json()) as Product;
   return c.redirect(`/products/${created.id}?saved=1`);
@@ -471,7 +471,7 @@ app.post("/products/:id", async (c) => {
   // what was typed, not the stored values.
   const reject = async (
     errors: Partial<Record<keyof ProductFormValues, string>>,
-    status: 400 | 409,
+    status: ConflictStatus,
   ): Promise<Response> => {
     const r = await apiRequest(c, productPath(id));
     if ("errorPage" in r) return r.errorPage;
@@ -494,10 +494,11 @@ app.post("/products/:id", async (c) => {
   const w = await apiWrite(c, productPath(id), jsonBody("PATCH", parsed.data));
   if ("errorPage" in w) return w.errorPage;
   if ("conflict" in w) {
-    return reject(
-      conflictErrors(w.conflict),
-      w.conflict === "slug_taken" ? 409 : 400,
-    );
+    const { status, message } = conflictOutcome(w.conflict, {
+      status: 400,
+      message: `The change was refused (${w.conflict}).`,
+    });
+    return reject({ slug: message }, status);
   }
   return c.redirect(`/products/${id}?saved=1`);
 });
@@ -514,7 +515,7 @@ app.post("/products/:id/sizes", async (c) => {
 
   const reject = async (
     error: string,
-    status: 400 | 409 | 422,
+    status: ConflictStatus,
   ): Promise<Response> => {
     const r = await apiRequest(c, productPath(id));
     if ("errorPage" in r) return r.errorPage;
@@ -542,10 +543,11 @@ app.post("/products/:id/sizes", async (c) => {
   );
   if ("errorPage" in w) return w.errorPage;
   if ("conflict" in w) {
-    return reject(
-      sizesConflictMessage(w.conflict),
-      w.conflict === "size_in_use" ? 409 : 422,
-    );
+    const { status, message } = conflictOutcome(w.conflict, {
+      status: 422,
+      message: `The sizes were refused (${w.conflict}).`,
+    });
+    return reject(message, status);
   }
   return c.redirect(`/products/${id}?saved=1`);
 });
@@ -561,19 +563,19 @@ app.post("/products/:id/delete", async (c) => {
     const r = await apiRequest(c, productPath(id));
     if ("errorPage" in r) return r.errorPage;
     const product = (await r.res.json()) as ProductWithSizes;
-    const deleteError =
-      w.conflict === "has_orders"
-        ? "This product has orders and can't be deleted. Set its status to hidden instead."
-        : `The delete was refused (${w.conflict}).`;
+    const { status, message } = conflictOutcome(w.conflict, {
+      status: 409,
+      message: `The delete was refused (${w.conflict}).`,
+    });
     return c.html(
       productEditPage({
         user: c.get("user"),
         product,
         values: productValues(product),
         sizeState: sizeStateFromProduct(product),
-        deleteError,
+        deleteError: message,
       }),
-      409,
+      status,
     );
   }
   return c.redirect("/products?deleted=1");
@@ -581,13 +583,13 @@ app.post("/products/:id/delete", async (c) => {
 
 // Re-render the edit page with an image error, re-reading the product so its
 // fields, sizes and remaining images are shown intact beside the message. The
-// status mirrors the API's refusal (413 for an oversized upload, 400 otherwise),
-// the way the fields, sizes and delete rejects each carry their API status.
+// status is the one ./forms gives the refusal (413 for an oversized upload, 400
+// otherwise), the way the fields, sizes and delete rejects carry theirs.
 async function renderImageError(
   c: Context<AdminEnv>,
   id: string,
   message: string,
-  status: 400 | 413,
+  status: ConflictStatus,
 ): Promise<Response> {
   const r = await apiRequest(c, productPath(id));
   if ("errorPage" in r) return r.errorPage;
@@ -624,8 +626,11 @@ app.post("/products/:id/images", async (c) => {
   });
   if ("errorPage" in w) return w.errorPage;
   if ("conflict" in w) {
-    const status = w.conflict === "too_large" ? 413 : 400;
-    return renderImageError(c, id, imageErrorMessage(w.conflict), status);
+    const { status, message } = conflictOutcome(w.conflict, {
+      status: 400,
+      message: `The upload was refused (${w.conflict}).`,
+    });
+    return renderImageError(c, id, message, status);
   }
   return c.redirect(`/products/${id}?saved=1`);
 });
@@ -677,7 +682,7 @@ app.post("/drops", async (c) => {
 
   const reject = (
     errors: Partial<Record<keyof DropFormValues, string>>,
-    status: 400 | 409,
+    status: ConflictStatus,
   ): Promise<Response> =>
     Promise.resolve(
       c.html(
@@ -696,10 +701,11 @@ app.post("/drops", async (c) => {
   const w = await apiWrite(c, "/admin/drops", jsonBody("POST", parsed.data));
   if ("errorPage" in w) return w.errorPage;
   if ("conflict" in w) {
-    return reject(
-      conflictErrors(w.conflict),
-      w.conflict === "slug_taken" ? 409 : 400,
-    );
+    const { status, message } = conflictOutcome(w.conflict, {
+      status: 400,
+      message: `The change was refused (${w.conflict}).`,
+    });
+    return reject({ slug: message }, status);
   }
   const created = (await w.res.json()) as Drop;
   return c.redirect(`/drops/${created.id}?saved=1`);
@@ -734,7 +740,7 @@ app.post("/drops/:id", async (c) => {
 
   const reject = (
     errors: Partial<Record<keyof DropFormValues, string>>,
-    status: 400 | 409,
+    status: ConflictStatus,
   ): Promise<Response> =>
     Promise.resolve(
       c.html(
@@ -759,10 +765,11 @@ app.post("/drops/:id", async (c) => {
   const w = await apiWrite(c, dropPath(id), jsonBody("PATCH", parsed.data));
   if ("errorPage" in w) return w.errorPage;
   if ("conflict" in w) {
-    return reject(
-      conflictErrors(w.conflict),
-      w.conflict === "slug_taken" ? 409 : 400,
-    );
+    const { status, message } = conflictOutcome(w.conflict, {
+      status: 400,
+      message: `The change was refused (${w.conflict}).`,
+    });
+    return reject({ slug: message }, status);
   }
   return c.redirect(`/drops/${id}?saved=1`);
 });
@@ -867,7 +874,7 @@ app.post("/users", async (c) => {
 
   const reject = async (
     errors: Partial<Record<"username" | "password", string>>,
-    status: 400 | 409,
+    status: ConflictStatus,
   ): Promise<Response> => {
     const r = await loadUsers(c);
     if ("errorPage" in r) return r.errorPage;
@@ -889,14 +896,11 @@ app.post("/users", async (c) => {
   const w = await apiWrite(c, "/admin/users", jsonBody("POST", parsed.data));
   if ("errorPage" in w) return w.errorPage;
   if ("conflict" in w) {
-    const message =
-      w.conflict === "username_taken"
-        ? "That username is already taken."
-        : `The user was refused (${w.conflict}).`;
-    return reject(
-      { username: message },
-      w.conflict === "username_taken" ? 409 : 400,
-    );
+    const { status, message } = conflictOutcome(w.conflict, {
+      status: 400,
+      message: `The user was refused (${w.conflict}).`,
+    });
+    return reject({ username: message }, status);
   }
   return c.redirect("/users?created=1");
 });
@@ -918,13 +922,13 @@ app.post("/users/:id/active", async (c) => {
   if ("conflict" in w) {
     const r = await loadUsers(c);
     if ("errorPage" in r) return r.errorPage;
-    const message =
-      w.conflict === "last_admin"
-        ? "That is the last active admin — deactivating it would lock everyone out."
-        : `The change was refused (${w.conflict}).`;
+    const { status, message } = conflictOutcome(w.conflict, {
+      status: 409,
+      message: `The change was refused (${w.conflict}).`,
+    });
     return c.html(
       usersPage({ user: c.get("user"), users: r.users, actionError: message }),
-      409,
+      status,
     );
   }
   return c.redirect("/users?updated=1");

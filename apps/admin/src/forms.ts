@@ -60,15 +60,69 @@ export function fieldErrors<T extends string>(
   return out;
 }
 
-// The API's write refusals mapped to a slug-field message. slug_taken is the one a
-// product or drop edit can hit (the row exists and its slug is the only unique
-// column); anything else is mapped defensively so an unexpected code still reads on
-// the slug. Both forms carry a `slug` field, so one shape serves both.
-export function conflictErrors(code: string): { slug: string } {
-  if (code === "slug_taken") {
-    return { slug: "That slug is already in use." };
-  }
-  return { slug: `The change was refused (${code}).` };
+// The status a refused write comes back as. apiWrite folds exactly these four
+// into a conflict; anything else is already the service or not-found page.
+export type ConflictStatus = 400 | 409 | 413 | 422;
+
+export interface ConflictOutcome {
+  status: ConflictStatus;
+  message: string;
+}
+
+// What each refusal the API can answer a write with means to a person, and the
+// status the screen echoes it back as. One table because it is one decision:
+// it used to be taken at every write site, which is how a taken slug came to be
+// answered 409 in four places and an oversized upload 413 in a fifth, each
+// deriving it again from the code beside its own message.
+//
+// Which field a message belongs beside stays with the caller — the screen knows
+// its own form, and the same slug_taken reads on the slug of a product and of a
+// drop.
+const CONFLICTS: Record<string, ConflictOutcome> = {
+  slug_taken: { status: 409, message: "That slug is already in use." },
+  drop_not_found: { status: 422, message: "That drop no longer exists." },
+  has_orders: {
+    status: 409,
+    message:
+      "This product has orders and can't be deleted. Set its status to hidden instead.",
+  },
+  size_in_use: {
+    status: 409,
+    message:
+      "A size an order references can't be removed — hide the product instead.",
+  },
+  unknown_size: {
+    status: 422,
+    message: "One of those sizes no longer exists. Reload and try again.",
+  },
+  too_large: { status: 413, message: "That image is too large." },
+  no_file: { status: 400, message: "Choose an image file to upload." },
+  alt_too_long: { status: 400, message: "The alt text is too long." },
+  invalid_upload: {
+    status: 400,
+    message: "That file could not be read as an image.",
+  },
+  unreadable: {
+    status: 400,
+    message: "That file could not be read as an image.",
+  },
+  username_taken: { status: 409, message: "That username is already taken." },
+  last_admin: {
+    status: 409,
+    message:
+      "That is the last active admin — deactivating it would lock everyone out.",
+  },
+};
+
+// A refusal as its screen should show it. The fallback is the screen's own way
+// of saying it has never seen this code — "The sizes were refused (…)" — and
+// carries the status that screen answers an unrecognised refusal with, which is
+// the one thing here that is genuinely per-screen.
+export function conflictOutcome(
+  code: string,
+  fallback: ConflictOutcome,
+): ConflictOutcome {
+  return CONFLICTS[code] ?? fallback;
 }
 
 // ----------------------------------------------------------- products
@@ -199,37 +253,6 @@ export function sizesFromForm(form: FormBody): {
     if (label.trim() !== "") sizes.push({ label, sort: formNum(sort) });
   }
   return { sizes: { sizes }, state: { existing, fresh } };
-}
-
-// The API's size-reconcile refusals as a message for the editor.
-export function sizesConflictMessage(code: string): string {
-  switch (code) {
-    case "size_in_use":
-      return "A size an order references can't be removed — hide the product instead.";
-    case "unknown_size":
-      return "One of those sizes no longer exists. Reload and try again.";
-    default:
-      return `The sizes were refused (${code}).`;
-  }
-}
-
-// ------------------------------------------------------------- images
-
-// The API's image-upload refusals as a message for the edit page.
-export function imageErrorMessage(code: string): string {
-  switch (code) {
-    case "too_large":
-      return "That image is too large.";
-    case "no_file":
-      return "Choose an image file to upload.";
-    case "alt_too_long":
-      return "The alt text is too long.";
-    case "invalid_upload":
-    case "unreadable":
-      return "That file could not be read as an image.";
-    default:
-      return `The upload was refused (${code}).`;
-  }
 }
 
 // -------------------------------------------------------------- drops
