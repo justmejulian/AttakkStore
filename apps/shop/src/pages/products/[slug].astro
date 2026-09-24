@@ -17,7 +17,13 @@ import ProductGraphic from "@/components/attakk/ProductGraphic.astro";
 import BuyBox from "@/components/attakk/BuyBox.tsx";
 import { getProduct } from "@/lib/catalog.ts";
 import { dropThemeStyle } from "@/lib/drop-theme.ts";
-import { formatFrancs, imageSrc, imageSrcset } from "@/lib/format.ts";
+import {
+  formatFrancs,
+  imageSrc,
+  imageSrcLarge,
+  imageSrcset,
+} from "@/lib/format.ts";
+import { productJsonLd } from "@/utils/seo.ts";
 import type { ProductWithDrop } from "@attakk/types";
 
 const { slug } = Astro.params;
@@ -53,9 +59,22 @@ const collection = drop
 const title = product ? product.name : "Product";
 const description =
   product?.description || product?.fit || "A piece from attakk.";
+
+const productJson =
+  product &&
+  productJsonLd(
+    product,
+    new URL(Astro.url.pathname, Astro.site),
+    lead ? new URL(imageSrcLarge(lead), Astro.site) : undefined,
+  );
 ---
 
 <BaseLayout title={title} description={description} theme="light">
+  {
+    productJson && (
+      <script slot="head" type="application/ld+json" set:html={productJson} />
+    )
+  }
   {
     unavailable ? (
       <Section paddingTop="large" paddingBottom="large">

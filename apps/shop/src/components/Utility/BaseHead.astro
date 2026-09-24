@@ -17,6 +17,14 @@ const isNoindex = noindex ?? isNoindexRoute(Astro.url.pathname);
 
 const pageTitle = title ? `${title} | ${SITE_NAME}` : SITE_NAME;
 const canonical = new URL(Astro.url.pathname, Astro.site);
+
+// The one share image every page carries today — the brand mark on the dark
+// theme, matching public/og-default.png's fixed size. Per-product cards (the
+// photo and the drop's own colours) are a later step, once there's real
+// photography to build them from.
+const ogImage = new URL("/og-default.png", Astro.site);
+const OG_IMAGE_WIDTH = 1200;
+const OG_IMAGE_HEIGHT = 630;
 ---
 
 <meta charset="utf-8" />
@@ -38,10 +46,15 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
 <meta property="og:title" content={pageTitle} />
 <meta property="og:description" content={description} />
 <meta property="og:url" content={canonical} />
+<meta property="og:image" content={ogImage} />
+<meta property="og:image:width" content={String(OG_IMAGE_WIDTH)} />
+<meta property="og:image:height" content={String(OG_IMAGE_HEIGHT)} />
+<meta property="og:image:alt" content={SITE_NAME} />
 
-<meta name="twitter:card" content="summary" />
+<meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content={pageTitle} />
 <meta name="twitter:description" content={description} />
+<meta name="twitter:image" content={ogImage} />
 
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 <meta name="generator" content={Astro.generator} />

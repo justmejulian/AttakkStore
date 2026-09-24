@@ -36,3 +36,11 @@ export function imageSrcset(image: ProductImage): string {
 export function imageSrc(image: ProductImage): string {
   return derivativeUrl(image.hash, derivativeWidths(image.width)[0]);
 }
+
+// The largest derivative, for the one place a big file is the point rather than
+// the cost: a product's JSON-LD `image`, where crawlers want the widest shot
+// available rather than the cheapest.
+export function imageSrcLarge(image: ProductImage): string {
+  const widths = derivativeWidths(image.width);
+  return derivativeUrl(image.hash, widths[widths.length - 1]!);
+}
