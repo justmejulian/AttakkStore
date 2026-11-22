@@ -61,10 +61,12 @@ const notice = unavailable
 <style>
   @layer components {
     /* Autofit so one past drop and a dozen take the same markup: portrait tiles
-       that fill the row and overflow onto the next line. */
+       that stretch to fill the row, two across even on a phone, and overflow onto
+       the next line as the row fills. */
     .archive-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(min(14rem, 100%), 1fr));
+      width: 100%;
+      grid-template-columns: repeat(auto-fit, minmax(min(9.5rem, 100%), 1fr));
       gap: var(--space-5);
       margin-top: var(--space-7);
     }
