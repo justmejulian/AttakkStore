@@ -19,6 +19,8 @@ interface Props {
   count: number;
   /** The drop's colour, filling the silhouette when a piece has no photo yet. */
   swatch?: string;
+  /** The drop is archived: ordering is closed, so the size preview is left out. */
+  archived?: boolean;
   /** Set to `false` to skip rendering. */
   render?: boolean;
   class?: string;
@@ -29,6 +31,7 @@ const {
   index,
   count,
   swatch = "var(--text)",
+  archived = false,
   render = true,
   class: className,
 } = Astro.props;
@@ -81,7 +84,7 @@ const lead = product.images[0];
 
         {product.fit && <p class="product-card_fit">{product.fit}</p>}
 
-        {product.sizes.length > 0 && (
+        {!archived && product.sizes.length > 0 && (
           <ul class="product-card_sizes" aria-label="Available sizes">
             {product.sizes.map((size) => (
               <li class="size-pill">{size.label}</li>
