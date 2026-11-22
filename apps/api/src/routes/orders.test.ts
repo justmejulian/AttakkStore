@@ -184,10 +184,21 @@ test("POST /orders rejects a repeated variant with 400", async () => {
 });
 
 test("POST /orders maps an unpurchasable product to 422", async () => {
-  const res = await post({
-    email: "buyer@example.com",
-    items: [{ product_id: 11, size_id: null, qty: 1 }], // hidden product
-  });
-  assert.equal(res.status, 422);
-  assert.deepEqual(await res.json(), { error: "product_unavailable" });
+  // A hidden product, a live product in an archived drop and a live product in a
+  // draft drop: none can be ordered, and a refused order leaves no row behind.
+  const before = db.prepare("SELECT count(*) AS n FROM orders").get() as {
+    n: number;
+  };
+  for (const product_id of [11, 12, 13]) {
+    const res = await post({
+      email: "buyer@example.com",
+      items: [{ product_id, size_id: null, qty: 1 }],
+    });
+    assert.equal(res.status, 422, `product ${product_id}`);
+    assert.deepEqual(await res.json(), { error: "product_unavailable" });
+  }
+  const after = db.prepare("SELECT count(*) AS n FROM orders").get() as {
+    n: number;
+  };
+  assert.equal(after.n, before.n);
 });
