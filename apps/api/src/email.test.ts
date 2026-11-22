@@ -120,6 +120,7 @@ test("confirmation email goes to the customer with the QR bill attached", () => 
   const mail = buildConfirmationEmail(config, order, pdf);
 
   assert.equal(mail.to, "buyer@example.com");
+  assert.equal(mail.bcc, config.from); // the shop keeps a copy of what went out
   assert.match(String(mail.subject), /RF18539007547034/);
   assert.match(String(mail.text), /6–10 weeks/); // the pickup lead-time wording
   assert.match(String(mail.text), /CHF 190.00/); // total off the rappen sum

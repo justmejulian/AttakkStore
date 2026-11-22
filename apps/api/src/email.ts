@@ -81,6 +81,10 @@ export function buildConfirmationEmail(
   return {
     from: config.from,
     to: order.email,
+    // Always a blind copy to the sender mailbox: SMTP submission leaves nothing
+    // in a Sent folder, so this is the shop's record of what actually went out.
+    // The sender, not notifyTo, so it holds even when notifications are rerouted.
+    bcc: config.from,
     subject: `Your ATTAKK order ${order.reference}`,
     text: body,
     attachments: [
