@@ -12,8 +12,8 @@ WORKDIR /repo
 
 FROM base AS build
 COPY . .
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
-RUN pnpm --filter @attakk/shop build
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --filter "@attakk/shop..."
+RUN pnpm --filter "@attakk/shop..." build
 RUN pnpm --filter @attakk/shop deploy --prod /app
 
 FROM base AS runtime
