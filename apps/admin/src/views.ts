@@ -1,6 +1,7 @@
 import {
   type AdminProductRow,
   type AdminUser,
+  derivativeWidths,
   DISPLAY_FONTS,
   type Drop,
   DROP_STATUSES,
@@ -37,6 +38,7 @@ import {
 } from "@attakk/types";
 import { html } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
+import { UPLOADS_URL } from "./config.js";
 import { formatChf, formatTimestamp } from "./format.js";
 import type { Session } from "./session.js";
 
@@ -936,11 +938,17 @@ export function productNewPage(opts: {
 }
 
 // The images section: each stored photo with a delete control, and an upload
-// form. The thumbnail is the row's inlined `placeholder` (a tiny blurred webp
-// data URI) — the full derivatives live on the API's volume and are served by the
-// storefront later, so this is the self-contained preview the admin can show now.
+// form. The thumbnail is the smallest derivative, loaded from the shop (which
+// serves the uploads volume) when UPLOADS_URL is set; otherwise it is the row's
+// inlined `placeholder`, a tiny blurred webp data URI the admin can always show.
 // Alt text is set at upload; editing it or reordering needs an API endpoint the
 // image routes don't have yet, so those are out of this step.
+function thumbSrc(img: ProductImage): string {
+  if (!UPLOADS_URL) return img.placeholder;
+  const [smallest] = derivativeWidths(img.width);
+  return `${UPLOADS_URL}/${img.hash}-${smallest}.webp`;
+}
+
 function imagesSection(opts: {
   productId: number;
   images: ProductImage[];
@@ -954,7 +962,7 @@ function imagesSection(opts: {
         : opts.images.map(
             (img) =>
               html`<figure>
-                <img src="${img.placeholder}" alt="${img.alt}" width="120" />
+                <img src="${thumbSrc(img)}" alt="${img.alt}" width="120" />
                 <figcaption>${img.alt || "(no alt text)"}</figcaption>
                 <form
                   method="post"

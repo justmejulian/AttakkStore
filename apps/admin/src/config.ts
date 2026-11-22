@@ -8,6 +8,12 @@
 // this at the API service on the shared internal network.
 export const API_URL = process.env.API_URL ?? "http://localhost:3000";
 
+// Where the shop serves product photos from, e.g. https://atk-collective.ch/uploads.
+// The admin has no uploads volume of its own, so with this set the image
+// thumbnails load the real derivative from the shop; unset, they fall back to the
+// inlined blurred placeholder.
+export const UPLOADS_URL = (process.env.UPLOADS_URL ?? "").replace(/\/+$/, "");
+
 // The key admin session cookies are signed with. A signed cookie cannot be
 // forged or tampered with, so the identity carried inside it can be trusted
 // without a server-side session store — the admin keeps none. The default is a
