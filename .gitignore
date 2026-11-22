@@ -29,3 +29,9 @@ yarn-error.log*
 # Claude Code working dir at the repo root only — app-level .claude/
 # folders (e.g. apps/shop/.claude/skills) are real project assets and stay tracked.
 /.claude/
+
+# agent instruction docs — kept local, not tracked
+/docs/agents/
+
+# data for the one-off stripe import script (plan step 29) — kept local, never committed
+/apps/api/src/cli/stripe-import-data.json
