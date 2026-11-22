@@ -49,7 +49,7 @@ const nextName = (drop: DropWithProducts) =>
 ---
 
 <BaseLayout title="Store" theme="light">
-  <Hero liveLabel={liveLabel} />
+  <Hero liveLabel={liveLabel} hasLive={liveCount > 0} />
 
   <div id="drops">
     {

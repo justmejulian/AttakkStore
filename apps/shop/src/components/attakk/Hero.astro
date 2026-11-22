@@ -15,9 +15,11 @@ interface Props {
   liveLabel: string;
   /** Where the call to action points. Defaults to the drops section. */
   ctaHref?: string;
+  /** Whether a drop is live. With none, the call to action is greyed out. */
+  hasLive?: boolean;
 }
 
-const { liveLabel, ctaHref = "#drops" } = Astro.props;
+const { liveLabel, ctaHref = "#drops", hasLive = true } = Astro.props;
 ---
 
 <Section class="hero_wrap" gap="6">
@@ -32,7 +34,15 @@ const { liveLabel, ctaHref = "#drops" } = Astro.props;
 
   <div class="hero_lede">
     <ButtonWrapper class="hero_actions">
-      <Button element="link" href={ctaHref}>Shop the current drop</Button>
+      {
+        hasLive ? (
+          <Button element="link" href={ctaHref}>
+            Shop the current drop
+          </Button>
+        ) : (
+          <Button disabled>Shop the current drop</Button>
+        )
+      }
       <span class="label color-faded">No restocks · sizes go fast</span>
     </ButtonWrapper>
   </div>
@@ -77,6 +87,16 @@ const { liveLabel, ctaHref = "#drops" } = Astro.props;
         grid-template-columns: minmax(0, 1fr);
         gap: var(--space-4);
       }
+    }
+
+    /* No live drop: the call to action reads as unavailable. The shared disabled
+       style only fades the fill, which leaves the red button pink, so the hero's
+       own button goes flat grey instead. */
+    .hero_actions button:disabled {
+      opacity: 1;
+      background-color: color-mix(in srgb, var(--text) 14%, transparent);
+      border-color: transparent;
+      color: var(--text-2);
     }
 
     .hero_actions {
