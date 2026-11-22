@@ -12,7 +12,7 @@
  */
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import Section from "@/components/Wrapper/Section.astro";
-import Paragraph from "@/components/Typography/Paragraph.astro";
+import Heading from "@/components/Typography/Heading.astro";
 import Hero from "@/components/attakk/Hero.astro";
 import DropSection from "@/components/attakk/DropSection.astro";
 import Interstitial from "@/components/attakk/Interstitial.astro";
@@ -55,9 +55,9 @@ const nextName = (drop: DropWithProducts) =>
     {
       notice && (
         <Section paddingTop="large" paddingBottom="large">
-          <Paragraph variant="large" class="color-faded">
+          <Heading tag="h2" variant="h1" class="margin-top-0">
             {notice}
-          </Paragraph>
+          </Heading>
         </Section>
       )
     }
