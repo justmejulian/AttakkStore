@@ -6,7 +6,7 @@
 #   curl localhost:4321                      # shop (public)
 #   curl localhost:8080/health               # admin (loopback only)
 #
-# The API publishes no port — like `dokku proxy:disable attakk-api`, it is
+# The API publishes no port — like `dokku proxy:disable attakk-store-api`, it is
 # reachable only from the other services over the `attakk` network.
 
 name: attakk

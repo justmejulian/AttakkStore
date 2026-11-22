@@ -138,26 +138,26 @@ dokku network:create attakk
 dokku storage:ensure-directory attakk
 
 # API — internal only, the sole writer of the data volume.
-dokku apps:create attakk-api
-dokku builder-dockerfile:set attakk-api dockerfile-path apps/api/Dockerfile
-dokku network:set attakk-api attach-post-create attakk
-dokku proxy:disable attakk-api                 # no published port
-dokku storage:mount attakk-api /var/lib/dokku/data/storage/attakk:/data
+dokku apps:create attakk-store-api
+dokku builder-dockerfile:set attakk-store-api dockerfile-path apps/api/Dockerfile
+dokku network:set attakk-store-api attach-post-create attakk
+dokku proxy:disable attakk-store-api                 # no published port
+dokku storage:mount attakk-store-api /var/lib/dokku/data/storage/attakk:/data
 
 # Admin — off the public proxy (reached through an SSH tunnel), talking to the
 # API over the shared network.
-dokku apps:create attakk-admin
-dokku builder-dockerfile:set attakk-admin dockerfile-path apps/admin/Dockerfile
-dokku network:set attakk-admin attach-post-create attakk
-dokku proxy:disable attakk-admin
-dokku config:set attakk-admin API_URL=http://attakk-api.web:3000
+dokku apps:create attakk-store-admin
+dokku builder-dockerfile:set attakk-store-admin dockerfile-path apps/admin/Dockerfile
+dokku network:set attakk-store-admin attach-post-create attakk
+dokku proxy:disable attakk-store-admin
+dokku config:set attakk-store-admin API_URL=http://attakk-store-api.web:3000
 
 # Shop — the only public app. Reaches the API over the shared network and reads
 # uploads straight off the API's volume, mounted read-only.
 dokku apps:create attakk-store
 dokku builder-dockerfile:set attakk-store dockerfile-path apps/shop/Dockerfile
 dokku network:set attakk-store attach-post-create attakk
-dokku config:set attakk-store API_URL=http://attakk-api.web:3000
+dokku config:set attakk-store API_URL=http://attakk-store-api.web:3000
 dokku storage:mount attakk-store /var/lib/dokku/data/storage/attakk/uploads:/uploads:ro
 ```
 
