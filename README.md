@@ -154,11 +154,11 @@ dokku config:set attakk-admin API_URL=http://attakk-api.web:3000
 
 # Shop — the only public app. Reaches the API over the shared network and reads
 # uploads straight off the API's volume, mounted read-only.
-dokku apps:create attakk-shop
-dokku builder-dockerfile:set attakk-shop dockerfile-path apps/shop/Dockerfile
-dokku network:set attakk-shop attach-post-create attakk
-dokku config:set attakk-shop API_URL=http://attakk-api.web:3000
-dokku storage:mount attakk-shop /var/lib/dokku/data/storage/attakk/uploads:/uploads:ro
+dokku apps:create attakk-store
+dokku builder-dockerfile:set attakk-store dockerfile-path apps/shop/Dockerfile
+dokku network:set attakk-store attach-post-create attakk
+dokku config:set attakk-store API_URL=http://attakk-api.web:3000
+dokku storage:mount attakk-store /var/lib/dokku/data/storage/attakk/uploads:/uploads:ro
 ```
 
 The Dockerfiles rely on BuildKit (the `RUN --mount` cache). Docker Engine 24+
