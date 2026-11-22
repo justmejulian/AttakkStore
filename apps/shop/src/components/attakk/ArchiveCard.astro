@@ -44,7 +44,7 @@ const lead = drop.products.find((p) => p.images.length > 0)?.images[0];
             class="archive-card_photo"
             src={imageSrc(lead)}
             srcset={imageSrcset(lead)}
-            sizes="(max-width: 48rem) 90vw, 22rem"
+            sizes="(max-width: 48rem) 45vw, 18rem"
             width={lead.width}
             height={lead.height}
             alt={lead.alt}
@@ -98,7 +98,7 @@ const lead = drop.products.find((p) => p.images.length > 0)?.images[0];
       }
     }
 
-    /* A wide frame holding the lead photo or, with none, the marker name centred
+    /* A tall frame holding the lead photo or, with none, the marker name centred
        on the collection's surface. */
     .archive-card_media {
       position: relative;
@@ -106,7 +106,7 @@ const lead = drop.products.find((p) => p.images.length > 0)?.images[0];
       align-items: center;
       justify-content: center;
       overflow: hidden;
-      aspect-ratio: 4 / 3;
+      aspect-ratio: 3 / 4;
       padding: var(--space-5);
       background-color: color-mix(in srgb, var(--text) 6%, transparent);
     }

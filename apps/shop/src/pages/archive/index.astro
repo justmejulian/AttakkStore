@@ -60,10 +60,11 @@ const notice = unavailable
 
 <style>
   @layer components {
-    /* Autofit so one past drop and a dozen take the same markup. */
+    /* Autofit so one past drop and a dozen take the same markup: portrait tiles
+       that fill the row and overflow onto the next line. */
     .archive-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(min(20rem, 100%), 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(min(14rem, 100%), 1fr));
       gap: var(--space-5);
       margin-top: var(--space-7);
     }
