@@ -96,17 +96,26 @@ const year = new Date().getFullYear();
       border-bottom: var(--border-width) solid var(--border);
     }
 
+    /* A flex gap spaces the tagline from the wordmark: the margin it had before
+       was lost to the global paragraph reset, and the 0.9 line height let the
+       tall capitals hang over the line below. */
+    .footer_brand {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-6);
+    }
+
     .footer_wordmark {
       margin: 0;
       font-family: var(--display-family);
       font-weight: var(--primary-bold);
       font-size: clamp(3.5rem, 2.1429rem + 6.7857vw, 9rem);
-      line-height: 0.9;
+      line-height: 1;
       letter-spacing: 0.06em;
     }
 
     .footer_tagline {
-      margin-top: var(--space-3);
+      margin: 0;
       font-family: var(--label-family);
       font-size: var(--label);
       letter-spacing: var(--label-letter-spacing);
